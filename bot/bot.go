@@ -1,6 +1,8 @@
 package bot
 
-import "time"
+import (
+	"time"
+)
 
 type Candle struct {
 	Pair  float64
@@ -30,4 +32,6 @@ type TradeBot interface {
 	// observe the source for any
 	// called by the system
 	OnCreate(*Config)
+	//Buy(*expert.TradeParams) (bool, error)
+	//Sell(*expert.SellParams) (bool, error)
 }

@@ -120,7 +120,7 @@ func (s *system) Record(candle *Candle, transform Transform) {
 	}
 
 	if len(dataset) != s.size {
-		s.log.Printf("invalid dataset size:%d expected:%d", len(dataset), s.size)
+		s.log.Printf("invalid dataset size:%d expected:%d\n", len(dataset), s.size)
 		return
 	}
 
@@ -138,14 +138,13 @@ func (s *system) TradeClosed(pair Pair) {
 }
 
 func (s *system) OnError(err error) {
-	s.log.Printf("An error occurred: %+v", err)
+	s.log.Printf("An error occurred: %+v\n", err)
 }
 
 func (s *system) tryClosing(candle *Candle) {
 	params, ok := activeTrades[candle.Pair]
 	if !ok {
 		// we currently have an active trade
-		s.log.Printf("Tried to close an already closed trade")
 		return
 	}
 

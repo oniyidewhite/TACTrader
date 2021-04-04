@@ -18,11 +18,19 @@ const (
 var log *log2.Logger
 
 // structs
-type Binance struct {
-	binance.Client
+type MyBinance struct {
+	// Allows us to buy and sell symbol
+	*binance.Client
+	// TODO: We should support multiple transform for each traded symbol
 	transform expert.Transform
-
+	// reference to our expert trader
 	expert expert.Trader
+}
+
+type Config struct {
+	Client    *binance.Client
+	Transform expert.Transform
+	Expert    expert.Trader
 }
 
 // init
@@ -31,7 +39,7 @@ func init() {
 }
 
 // methods
-func (r *Binance) OnCreate(config *bot.Config) {
+func (r *MyBinance) OnCreate(config *bot.Config) {
 	binance.UseTestnet = config.IsTest
 	wsKlineHandler := func(event *binance.WsKlineEvent) {
 		// pass result to expert Trader
@@ -49,31 +57,29 @@ func (r *Binance) OnCreate(config *bot.Config) {
 		return
 	}
 
-	go func() {
-		<-doneC
-	}()
+	<-doneC
 }
 
 // check if we can close this trade.
 // if trade doesn't exist we still return false
 func convert(kline *binance.WsKlineEvent) *expert.Candle {
-	high, err := parse(kline.Kline.High)
+	high, err := parseString(kline.Kline.High)
 	if err != nil {
 		return nil
 	}
-	low, err := parse(kline.Kline.Low)
+	low, err := parseString(kline.Kline.Low)
 	if err != nil {
 		return nil
 	}
-	open, err := parse(kline.Kline.Open)
+	open, err := parseString(kline.Kline.Open)
 	if err != nil {
 		return nil
 	}
-	cl, err := parse(kline.Kline.Close)
+	cl, err := parseString(kline.Kline.Close)
 	if err != nil {
 		return nil
 	}
-	vol, err := parse(kline.Kline.Volume)
+	vol, err := parseString(kline.Kline.Volume)
 	if err != nil {
 		return nil
 	}
@@ -89,12 +95,15 @@ func convert(kline *binance.WsKlineEvent) *expert.Candle {
 		Closed: kline.Kline.IsFinal,
 	}
 }
-
-func parse(value string) (float64, error) {
+func parseString(value string) (float64, error) {
 	return strconv.ParseFloat(value, 64)
 }
 
 // functions
-func New() {
-
+func New(config *Config) *MyBinance {
+	return &MyBinance{
+		Client:    config.Client,
+		transform: config.Transform,
+		expert:    config.Expert,
+	}
 }
