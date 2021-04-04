@@ -202,8 +202,6 @@ func TestExpertSystem(t *testing.T) {
 			return true
 		}
 
-
-
 		result, err := NewTrader(&Config{
 			Size:       1,
 			BuyAction:  buyAction,

@@ -98,6 +98,7 @@ func init() {
 func (s *system) Record(candle *Candle, transform Transform) {
 	if !candle.Closed {
 		//Still actively traded
+		s.tryClosing(candle)
 		return
 	}
 	// persist the new candle
