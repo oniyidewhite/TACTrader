@@ -14,7 +14,7 @@ const (
 	minSize = 1
 	maxSize = 180
 
-	logPrefix = "ea: \t"
+	logPrefix = "ea:\t"
 )
 
 // var
@@ -59,11 +59,16 @@ type Action func(*TradeParams) bool
 
 type Pair string
 
-type System struct {
+type system struct {
 	size       int
 	datasource DataSource
 	action     Action
 	log        *log.Logger
+}
+
+type Trader interface {
+	Record(candle *Candle, transform Transform)
+	TradeClosed(pair Pair)
 }
 
 // init
@@ -72,7 +77,7 @@ func init() {
 }
 
 // methods
-func (s *System) Record(candle *Candle, transform Transform) {
+func (s *system) Record(candle *Candle, transform Transform) {
 	if !candle.Closed {
 		//Still actively traded
 		return
@@ -106,21 +111,21 @@ func (s *System) Record(candle *Candle, transform Transform) {
 	}
 }
 
-func (s *System) TradeClosed(pair Pair) {
+func (s *system) TradeClosed(pair Pair) {
 	delete(activeTrades, pair)
 }
 
 // export
-func NewSystem(size int, action Action, storage DataSource) (*System, error) {
-	return NewSystemWithLogger(size, action, storage, log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile))
+func NewTrader(size int, action Action, storage DataSource) (Trader, error) {
+	return NewTraderWithLogger(size, action, storage, log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile))
 }
 
-func NewSystemWithLogger(size int, action Action, storage DataSource, logger *log.Logger) (*System, error) {
+func NewTraderWithLogger(size int, action Action, storage DataSource, logger *log.Logger) (Trader, error) {
 	if size < minSize || size > maxSize {
 		return nil, invalidSizeError
 	}
 
-	return &System{
+	return &system{
 		size:       size,
 		datasource: storage,
 		action:     action,

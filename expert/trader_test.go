@@ -27,23 +27,7 @@ func (m *memoryStorage) cleanup() {
 	m.store = map[Pair][]*Candle{}
 }
 
-func NewMemoryStore() *memoryStorage {
-	return &memoryStorage{}
-}
-
-func NewRandomCandle(pair Pair) *Candle {
-	return &Candle{
-		Pair:   pair,
-		High:   rand.Float64(),
-		Low:    rand.Float64(),
-		Open:   rand.Float64(),
-		Close:  rand.Float64(),
-		Volume: rand.Float64(),
-		Time:   rand.Float64(),
-		Closed: true,
-	}
-}
-
+// TODO: Simplify test
 func TestExpertSystem(t *testing.T) {
 	dataSource := NewMemoryStore()
 	dataSource.cleanup()
@@ -52,7 +36,7 @@ func TestExpertSystem(t *testing.T) {
 		action := func(params *TradeParams) bool {
 			return false
 		}
-		_, err := NewSystem(0, action, nil)
+		_, err := NewTrader(0, action, nil)
 		if err == nil {
 			t.FailNow()
 		}
@@ -61,7 +45,7 @@ func TestExpertSystem(t *testing.T) {
 		action := func(params *TradeParams) bool {
 			return false
 		}
-		result, err := NewSystem(2, action, nil)
+		result, err := NewTrader(2, action, nil)
 		if err != nil {
 			t.FailNow()
 		}
@@ -78,7 +62,7 @@ func TestExpertSystem(t *testing.T) {
 
 		var pair Pair = "test"
 
-		result, err := NewSystem(2, action, dataSource)
+		result, err := NewTrader(2, action, dataSource)
 		if err != nil {
 			t.FailNow()
 		}
@@ -104,7 +88,7 @@ func TestExpertSystem(t *testing.T) {
 
 		var pair Pair = "test"
 
-		result, err := NewSystem(2, action, dataSource)
+		result, err := NewTrader(2, action, dataSource)
 		if err != nil {
 			t.FailNow()
 		}
@@ -141,7 +125,7 @@ func TestExpertSystem(t *testing.T) {
 
 		var pair Pair = "test"
 
-		result, err := NewSystem(2, action, dataSource)
+		result, err := NewTrader(2, action, dataSource)
 		if err != nil {
 			t.FailNow()
 		}
@@ -174,4 +158,21 @@ func TestExpertSystem(t *testing.T) {
 			}
 		})
 	})
+}
+
+func NewMemoryStore() *memoryStorage {
+	return &memoryStorage{}
+}
+
+func NewRandomCandle(pair Pair) *Candle {
+	return &Candle{
+		Pair:   pair,
+		High:   rand.Float64(),
+		Low:    rand.Float64(),
+		Open:   rand.Float64(),
+		Close:  rand.Float64(),
+		Volume: rand.Float64(),
+		Time:   rand.Float64(),
+		Closed: true,
+	}
 }
