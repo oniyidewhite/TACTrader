@@ -2,6 +2,7 @@ package expert
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 )
@@ -19,7 +20,7 @@ const (
 
 // var
 var (
-	activeTrades     map[Pair]bool
+	activeTrades     map[Pair]*TradeParams
 	invalidSizeError = errors.New("invalid size argument")
 )
 
@@ -33,7 +34,7 @@ type Candle struct {
 	Close  float64
 	Volume float64
 
-	Time   float64
+	Time   int64
 	Closed bool
 }
 
@@ -46,6 +47,20 @@ type TradeParams struct {
 	Pair         Pair
 }
 
+type SellParams struct {
+	IsStopLoss  bool
+	SellTradeAt float64
+	PL          float64
+	Pair        Pair
+}
+
+type Config struct {
+	Size       int
+	BuyAction  BuyAction
+	SellAction SellAction
+	Storage    DataSource
+}
+
 // interface to save and retrieve candles
 type DataSource interface {
 	FetchCandles(pair Pair, size int) ([]*Candle, error)
@@ -55,25 +70,28 @@ type DataSource interface {
 // function for analyze the data set, returns a %value, if the trade is worth taking
 type Transform func([]*Candle) *TradeParams
 
-type Action func(*TradeParams) bool
+type BuyAction func(*TradeParams) bool
+type SellAction func(*SellParams) bool
 
 type Pair string
 
 type system struct {
 	size       int
 	datasource DataSource
-	action     Action
+	buyAction  BuyAction
+	sellAction SellAction
 	log        *log.Logger
 }
 
 type Trader interface {
 	Record(candle *Candle, transform Transform)
 	TradeClosed(pair Pair)
+	OnError(error)
 }
 
 // init
 func init() {
-	activeTrades = map[Pair]bool{}
+	activeTrades = make(map[Pair]*TradeParams)
 }
 
 // methods
@@ -90,6 +108,7 @@ func (s *system) Record(candle *Candle, transform Transform) {
 
 	if _, ok := activeTrades[candle.Pair]; ok {
 		// we currently have an active trade
+		s.tryClosing(candle)
 		return
 	}
 
@@ -107,7 +126,9 @@ func (s *system) Record(candle *Candle, transform Transform) {
 	result := transform(dataset)
 	if result.Rating > thresholdMin && result.Rating < thresholdMax {
 		// Call next function
-		activeTrades[candle.Pair] = s.action(result)
+		if s.buyAction(result) {
+			activeTrades[candle.Pair] = result
+		}
 	}
 }
 
@@ -115,20 +136,55 @@ func (s *system) TradeClosed(pair Pair) {
 	delete(activeTrades, pair)
 }
 
-// export
-func NewTrader(size int, action Action, storage DataSource) (Trader, error) {
-	return NewTraderWithLogger(size, action, storage, log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile))
+func (s *system) OnError(err error) {
+	s.log.Printf("An error occurred: %+v", err)
 }
 
-func NewTraderWithLogger(size int, action Action, storage DataSource, logger *log.Logger) (Trader, error) {
-	if size < minSize || size > maxSize {
+func (s *system) tryClosing(candle *Candle) {
+	params, ok := activeTrades[candle.Pair]
+	if !ok {
+		// we currently have an active trade
+		s.log.Printf("Tried to close an already closed trade")
+		return
+	}
+
+	if candle.Close <= params.StopLossAt {
+		if s.sellAction(&SellParams{
+			IsStopLoss:  true,
+			SellTradeAt: params.TakeProfitAt,
+			PL:          params.StopLossAt - params.OpenTradeAt,
+			Pair:        candle.Pair,
+		}) {
+			s.TradeClosed(candle.Pair)
+		}
+	} else if candle.Close >= params.TakeProfitAt {
+		fmt.Println(candle.Close, params.TakeProfitAt)
+		if s.sellAction(&SellParams{
+			IsStopLoss:  false,
+			SellTradeAt: params.TakeProfitAt,
+			PL:          params.TakeProfitAt - params.OpenTradeAt,
+			Pair:        candle.Pair,
+		}) {
+			s.TradeClosed(candle.Pair)
+		}
+	}
+}
+
+// export
+func NewTrader(config *Config) (Trader, error) {
+	return NewTraderWithLogger(config, log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile))
+}
+
+func NewTraderWithLogger(config *Config, logger *log.Logger) (Trader, error) {
+	if config.Size < minSize || config.Size > maxSize {
 		return nil, invalidSizeError
 	}
 
 	return &system{
-		size:       size,
-		datasource: storage,
-		action:     action,
+		size:       config.Size,
+		datasource: config.Storage,
+		buyAction:  config.BuyAction,
+		sellAction: config.SellAction,
 		log:        logger,
 	}, nil
 }

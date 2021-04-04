@@ -1,12 +1,16 @@
 package store
 
-import "time"
+import (
+	"github.com/globalsign/mgo/bson"
+	"time"
+)
 
 type BotData struct {
-	Candle *Candle   `json:"candle"`
-	Date   time.Time `json:"date"`
-	Pair   string    `json:"pair"`
-	Id     string    `json:"id" bson:"_id"`
+	Candle   *Candle       `json:"candle"`
+	IsClosed bool          `json:"is_closed"`
+	Date     time.Time     `json:"date"`
+	Pair     string        `json:"pair"`
+	Id       bson.ObjectId `json:"id" bson:"_id"`
 }
 
 type Candle struct {

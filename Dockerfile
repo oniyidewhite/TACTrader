@@ -1,6 +1,10 @@
 # Builder
 FROM golang:1.14-alpine3.11 AS builder
 
+ARG dburl
+ARG bSkey
+ARG bPkey
+
 WORKDIR /src
 COPY . .
 RUN go mod tidy

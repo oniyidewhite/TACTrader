@@ -4,6 +4,7 @@ import (
 	"github.com/globalsign/mgo/bson"
 	"github.com/oblessing/artisgo/bot/store"
 	"log"
+	"math/rand"
 	"os"
 	"testing"
 )
@@ -48,10 +49,10 @@ func TestMongoDBService_Save(t *testing.T) {
 	}
 
 	err = service.Save(&store.BotData{
-		Candle: nil,
+		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   "test",
-		Id:     bson.NewObjectId().String(),
+		Id:     bson.NewObjectId(),
 	})
 
 	if err != nil {
@@ -68,38 +69,38 @@ func TestMongoDBService_SaveAndRetrieve(t *testing.T) {
 		t.Fatalf("Unable to initialize mongo service: %+v", err)
 	}
 
-	ids := []string{bson.NewObjectId().String(), bson.NewObjectId().String()}
+	ids := []bson.ObjectId{bson.NewObjectId(), bson.NewObjectId()}
 
 	err = service.Save(&store.BotData{
-		Candle: nil,
+		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId().String(),
+		Id:     bson.NewObjectId(),
 	})
 
 	err = service.Save(&store.BotData{
-		Candle: nil,
+		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId().String(),
+		Id:     bson.NewObjectId(),
 	})
 
 	err = service.Save(&store.BotData{
-		Candle: nil,
+		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId().String(),
+		Id:     bson.NewObjectId(),
 	})
 
 	err = service.Save(&store.BotData{
-		Candle: nil,
+		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
 		Id:     ids[0],
 	})
 
 	err = service.Save(&store.BotData{
-		Candle: nil,
+		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
 		Id:     ids[1],
@@ -118,7 +119,7 @@ func TestMongoDBService_SaveAndRetrieve(t *testing.T) {
 		t.Fatalf("Only 2 records should be returned: %+v", err)
 	}
 
-	data := []string{}
+	data := []bson.ObjectId{}
 	for _, v := range records {
 		data = append(data, v.Id)
 	}
@@ -129,5 +130,15 @@ func TestMongoDBService_SaveAndRetrieve(t *testing.T) {
 
 	if data[1] != ids[0] {
 		t.Fatalf("Invalid order, got:%+v expected %+v", data, ids)
+	}
+}
+
+func randomCandle() *store.Candle {
+	return &store.Candle{
+		Open:  rand.Float64(),
+		Close: rand.Float64(),
+		High:  rand.Float64(),
+		Low:   rand.Float64(),
+		Vol:   rand.Float64(),
 	}
 }
