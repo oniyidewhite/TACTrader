@@ -55,7 +55,7 @@ func (m *mapper) convertTo(candle *Candle) *store.BotData {
 			Vol:   candle.Volume,
 		},
 		IsClosed: candle.Closed,
-		Date:     time.Unix(0, candle.Time),
+		Date:     time.Unix(candle.Time / 1000,0),
 		Pair:     string(candle.Pair),
 		Id:       bson.NewObjectId(),
 	}

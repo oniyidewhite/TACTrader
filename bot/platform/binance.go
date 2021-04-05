@@ -100,7 +100,7 @@ func parseString(value string) (float64, error) {
 }
 
 // functions
-func New(config *Config) *MyBinance {
+func New(config *Config) bot.TradeBot {
 	return &MyBinance{
 		Client:    config.Client,
 		transform: config.Transform,

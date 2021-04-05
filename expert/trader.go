@@ -2,14 +2,13 @@ package expert
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"os"
 )
 
 // const
 const (
-	thresholdMin = 20
+	thresholdMin = 23
 	thresholdMax = 40
 
 	minSize = 1
@@ -120,7 +119,7 @@ func (s *system) Record(candle *Candle, transform Transform) {
 	}
 
 	if len(dataset) != s.size {
-		s.log.Printf("invalid dataset size:%d expected:%d\n", len(dataset), s.size)
+		s.log.Printf("invalid dataset size:%d expected:%d for:%s\n", len(dataset), s.size, candle.Pair)
 		return
 	}
 
@@ -158,7 +157,6 @@ func (s *system) tryClosing(candle *Candle) {
 			s.TradeClosed(candle.Pair)
 		}
 	} else if candle.Close >= params.TakeProfitAt {
-		fmt.Println(candle.Close, params.TakeProfitAt)
 		if s.sellAction(&SellParams{
 			IsStopLoss:  false,
 			SellTradeAt: params.TakeProfitAt,
