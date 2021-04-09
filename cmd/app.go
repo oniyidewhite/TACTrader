@@ -148,15 +148,9 @@ func calculateActions() []*expert.CalculateAction {
 					}
 				}
 
-				for _, i := range up {
-					sumUp += i.Close
-				}
-				avgU := sumUp / float64(len(up))
+				// TODO(oblessing): Complete RSI
 
-				for _, i := range down {
-					sumDown += i.Close
-				}
-				avgD := sumDown / float64(len(down))
+				return 0
 			},
 		},
 	}
