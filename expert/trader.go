@@ -19,8 +19,9 @@ const (
 
 // var
 var (
-	activeTrades     map[Pair]*TradeParams
-	invalidSizeError = errors.New("invalid size argument")
+	activeTrades           map[Pair]*TradeParams
+	invalidSizeError       = errors.New("invalid size argument")
+	invalidSizeActionError = errors.New("invalid size for action argument")
 )
 
 // structs
@@ -32,6 +33,9 @@ type Candle struct {
 	Open   float64
 	Close  float64
 	Volume float64
+
+	// Holds other information like RSI, MA or any other data the system needs
+	OtherData map[string]float64
 
 	Time   int64
 	Closed bool
@@ -54,10 +58,11 @@ type SellParams struct {
 }
 
 type Config struct {
-	Size       int
-	BuyAction  BuyAction
-	SellAction SellAction
-	Storage    DataSource
+	Size            int
+	BuyAction       BuyAction
+	SellAction      SellAction
+	Storage         DataSource
+	CalculateAction []*CalculateAction
 }
 
 // interface to save and retrieve candles
@@ -74,12 +79,19 @@ type SellAction func(*SellParams) bool
 
 type Pair string
 
+type CalculateAction struct {
+	Name   string
+	Size   int8
+	Action func([]*Candle) float64
+}
+
 type system struct {
-	size       int
-	datasource DataSource
-	buyAction  BuyAction
-	sellAction SellAction
-	log        *log.Logger
+	size            int
+	datasource      DataSource
+	buyAction       BuyAction
+	sellAction      SellAction
+	log             *log.Logger
+	calculateAction []*CalculateAction
 }
 
 type Trader interface {
@@ -94,12 +106,33 @@ func init() {
 }
 
 // methods
+func (c *Candle) IsUp() bool {
+	return c.Close > c.Open
+}
+
 func (s *system) Record(candle *Candle, transform Transform) {
 	if !candle.Closed {
 		//Still actively traded
 		s.tryClosing(candle)
 		return
 	}
+
+	// apply actions
+	for _, action := range s.calculateAction {
+		candles, err := s.datasource.FetchCandles(candle.Pair, int(action.Size-1))
+		if err != nil {
+			s.log.Printf("Unable to apply calculate:%+v", err)
+			break
+		}
+
+		if len(candles) != int(action.Size-1) {
+			s.log.Printf("Found len:%d, expected:%d\n", len(candles)+1, action.Size)
+			break
+		}
+
+		candle.OtherData[action.Name] = action.Action(append([]*Candle{candle}, candles...))
+	}
+
 	// persist the new candle
 	if err := s.datasource.Persist(candle); err != nil {
 		s.log.Println(err)
@@ -178,11 +211,17 @@ func NewTraderWithLogger(config *Config, logger *log.Logger) (Trader, error) {
 		return nil, invalidSizeError
 	}
 
+	for _, i := range config.CalculateAction {
+		if i.Size < 1 {
+			return nil, invalidSizeActionError
+		}
+	}
 	return &system{
-		size:       config.Size,
-		datasource: config.Storage,
-		buyAction:  config.BuyAction,
-		sellAction: config.SellAction,
-		log:        logger,
+		size:            config.Size,
+		datasource:      config.Storage,
+		buyAction:       config.BuyAction,
+		sellAction:      config.SellAction,
+		log:             logger,
+		calculateAction: config.CalculateAction,
 	}, nil
 }

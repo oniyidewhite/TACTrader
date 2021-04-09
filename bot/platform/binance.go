@@ -85,14 +85,15 @@ func convert(kline *binance.WsKlineEvent) *expert.Candle {
 	}
 
 	return &expert.Candle{
-		Pair:   expert.Pair(kline.Symbol),
-		High:   high,
-		Low:    low,
-		Open:   open,
-		Close:  cl,
-		Volume: vol,
-		Time:   kline.Time,
-		Closed: kline.Kline.IsFinal,
+		Pair:      expert.Pair(kline.Symbol),
+		High:      high,
+		Low:       low,
+		Open:      open,
+		Close:     cl,
+		Volume:    vol,
+		Time:      kline.Time,
+		Closed:    kline.Kline.IsFinal,
+		OtherData: map[string]float64{},
 	}
 }
 func parseString(value string) (float64, error) {

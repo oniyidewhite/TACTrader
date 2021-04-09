@@ -32,7 +32,7 @@ func main() {
 	// create all the supported symbols
 	bot := initTradeBot()
 
-	botOtherTradeList(bot)
+	//botOtherTradeList(bot)
 
 	// Main
 	bConfigBnb := &bot2.Config{
@@ -98,13 +98,14 @@ func sell(params *expert.SellParams) bool {
 func initTradeBot() bot2.TradeBot {
 	storage, err := mongo.NewMongoInstance(DatabaseUri)
 	if err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 	eaConfig := &expert.Config{
-		Size:       18,
-		BuyAction:  buy,
-		SellAction: sell,
-		Storage:    expert.NewDataSource(storage),
+		Size:            18,
+		BuyAction:       buy,
+		SellAction:      sell,
+		Storage:         expert.NewDataSource(storage),
+		CalculateAction: calculateActions(),
 	}
 	ea, err := expert.NewTrader(eaConfig)
 	if err != nil {
@@ -117,6 +118,48 @@ func initTradeBot() bot2.TradeBot {
 	}
 	bot := platform.New(pConfig)
 	return bot
+}
+
+func calculateActions() []*expert.CalculateAction {
+	return []*expert.CalculateAction{
+		{
+			Name: "MA36",
+			Size: 36,
+			Action: func(candles []*expert.Candle) float64 {
+				var sum float64 = 0
+				for _, i := range candles {
+					sum += i.Close
+				}
+
+				return sum / float64(len(candles))
+			},
+		},
+		{
+			Name: "RSI6",
+			Size: 6,
+			Action: func(candles []*expert.Candle) float64 {
+				var sumUp float64 = 0
+				var sumDown float64 = 0
+				for _, i := range candles {
+					if i.IsUp() {
+						sumUp += i.Close - i.Open
+					} else {
+						sumDown += i.Open - i.Close
+					}
+				}
+
+				for _, i := range up {
+					sumUp += i.Close
+				}
+				avgU := sumUp / float64(len(up))
+
+				for _, i := range down {
+					sumDown += i.Close
+				}
+				avgD := sumDown / float64(len(down))
+			},
+		},
+	}
 }
 
 func botOtherTradeList(bot bot2.TradeBot) {

@@ -306,6 +306,62 @@ func TestExpertSystem(t *testing.T) {
 			}
 		})
 	})
+	t.Run("Test action logic to calculate some data", func(t *testing.T) {
+		var pair Pair = "test"
+
+		dataSource = NewMemoryStore()
+		dataSource.cleanup()
+		buyAction := func(params *TradeParams) bool {
+			return true
+		}
+
+		sellAction := func(params *SellParams) bool {
+			return true
+		}
+
+		result, err := NewTrader(&Config{
+			Size:       2,
+			BuyAction:  buyAction,
+			SellAction: sellAction,
+			Storage:    dataSource,
+			CalculateAction: []*CalculateAction{
+				{
+					Name: "k",
+					Size: 2,
+					Action: func(candles []*Candle) float64 {
+						return 10
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.FailNow()
+		}
+
+		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
+			// We should not call this function yet
+			t.Fatalf("This function shouldn't be called")
+			return &TradeParams{}
+		})
+
+		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
+			return &TradeParams{}
+		})
+
+		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
+			// We should not call this function yet
+			if candles[0].OtherData["k"] != 10 {
+				t.Fatalf("Candle should contain key:k with value:10 instead got:%f\n", candles[0].OtherData["k"])
+			}
+			return &TradeParams{
+				OpenTradeAt:  1,
+				TakeProfitAt: 2,
+				StopLossAt:   0,
+				Rating:       33,
+				Pair:         "test",
+			}
+		})
+	})
 }
 
 func NewMemoryStore() *memoryStorage {
@@ -314,13 +370,14 @@ func NewMemoryStore() *memoryStorage {
 
 func NewRandomCandle(pair Pair) *Candle {
 	return &Candle{
-		Pair:   pair,
-		High:   rand.Float64(),
-		Low:    rand.Float64(),
-		Open:   rand.Float64(),
-		Close:  rand.Float64(),
-		Volume: rand.Float64(),
-		Time:   rand.Int63(),
-		Closed: true,
+		Pair:      pair,
+		High:      rand.Float64(),
+		Low:       rand.Float64(),
+		Open:      rand.Float64(),
+		Close:     rand.Float64(),
+		Volume:    rand.Float64(),
+		Time:      rand.Int63(),
+		OtherData: map[string]float64{},
+		Closed:    true,
 	}
 }

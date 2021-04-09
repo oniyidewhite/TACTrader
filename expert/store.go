@@ -34,14 +34,15 @@ func (m *storage) Persist(candle *Candle) error {
 
 func (m *mapper) convertFrom(candle *store.BotData) *Candle {
 	return &Candle{
-		Pair:   Pair(candle.Pair),
-		High:   candle.Candle.High,
-		Low:    candle.Candle.Low,
-		Open:   candle.Candle.Open,
-		Close:  candle.Candle.Close,
-		Volume: candle.Candle.Vol,
-		Time:   candle.Date.Unix(),
-		Closed: candle.IsClosed,
+		Pair:      Pair(candle.Pair),
+		High:      candle.Candle.High,
+		Low:       candle.Candle.Low,
+		Open:      candle.Candle.Open,
+		Close:     candle.Candle.Close,
+		Volume:    candle.Candle.Vol,
+		Time:      candle.Date.Unix(),
+		Closed:    candle.IsClosed,
+		OtherData: candle.Others,
 	}
 }
 
@@ -54,8 +55,9 @@ func (m *mapper) convertTo(candle *Candle) *store.BotData {
 			Low:   candle.Low,
 			Vol:   candle.Volume,
 		},
+		Others:   candle.OtherData,
 		IsClosed: candle.Closed,
-		Date:     time.Unix(candle.Time / 1000,0),
+		Date:     time.Unix(candle.Time/1000, 0),
 		Pair:     string(candle.Pair),
 		Id:       bson.NewObjectId(),
 	}
