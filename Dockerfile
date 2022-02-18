@@ -1,22 +1,15 @@
-# Builder
-FROM golang:1.14-alpine3.11 AS builder
+FROM golang:1.17 as build
 
-ARG dburl
-ARG bSkey
-ARG bPkey
+MAINTAINER "ea-trader"
 
-WORKDIR /src
+WORKDIR /build
 COPY . .
+RUN go mod download
 RUN go mod tidy
+RUN go mod vendor
+RUN CGO_ENABLED=0 go build -o /app ./cmd
 
-WORKDIR /src/cmd
-RUN go build .
-
-# Application
-FROM golang:1.14-alpine3.11 AS app
-
-COPY --from=builder /src/cmd/cmd /bin
-WORKDIR /bin
-CMD ["cmd"]
-
-
+#Create runner
+FROM alpine:3.10
+COPY --from=build /app /
+ENTRYPOINT ["/app"]
