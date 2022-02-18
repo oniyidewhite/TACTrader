@@ -13,7 +13,7 @@ import (
 
 // this params would be injected
 var (
-	binanceApiKey    = "rLNxccORz0Erumx6JfA7RAHyykQUklSQ338gANKQdizcRBT1BpxPwu2QD5nuO8Jr"
+	binanceApiKey    = ""
 	binanceSecretKey = ""
 	DatabaseUri      = "mongodb://user:password@localhost:27017"
 	logger           *log2.Logger
