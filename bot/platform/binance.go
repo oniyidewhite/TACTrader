@@ -1,63 +1,94 @@
 package platform
 
 import (
+	"errors"
 	"github.com/adshao/go-binance/v2"
 	"github.com/oblessing/artisgo/bot"
 	"github.com/oblessing/artisgo/expert"
 	log2 "log"
 	"os"
 	"strconv"
+	"sync"
 )
 
-// consts
 const (
 	logPrefix = "binance:\t"
 )
 
-// vars
 var log *log2.Logger
 
-// structs
-type MyBinance struct {
+// myBinance represent My Binance API configuration
+type myBinance struct {
 	// Allows us to buy and sell symbol
-	*binance.Client
-	// TODO: We should support multiple transform for each traded symbol
-	transform expert.Transform
-	// reference to our expert trader
+	b *binance.Client
+	// Crypto pairs we are watching
+	pairs []bot.PairConfig
+	// Know if the trading bot has started trading
+	hasStarted bool
+	// Helps sync start
+	state sync.Once
+
 	expert expert.Trader
 }
 
+func (r *myBinance) WatchAndTrade(config ...bot.PairConfig) error {
+	if r.hasStarted {
+		return errors.New("bot has already started")
+	}
+
+	r.pairs = append(r.pairs, config...)
+
+	return nil
+}
+
+func (r *myBinance) StartTrading() error {
+	if r.hasStarted {
+		return errors.New("bot has already started")
+	}
+
+	r.state.Do(func() {
+		r.hasStarted = true
+
+		errHandler := func(err error) {
+			log.Println(err)
+		}
+
+		// Start all the current pairs
+		for _, p := range r.pairs {
+			p := p
+			go func() {
+				wsKlineHandler := func(event *binance.WsKlineEvent) {
+					// pass result to expert Trader
+					r.expert.Record(convert(event), p.Strategy)
+				}
+
+				// We restart if we encounter an error.
+				for {
+					doneC, _, err := binance.WsKlineServe(p.Pair, p.Period, wsKlineHandler, errHandler)
+					if err != nil {
+						log.Println(err)
+						return
+					}
+
+					<-doneC
+				}
+			}()
+		}
+	})
+
+	// Lock
+	<-make(chan struct{})
+	return nil
+}
+
 type Config struct {
-	Client    *binance.Client
-	Transform expert.Transform
-	Expert    expert.Trader
+	Client *binance.Client
+	Expert expert.Trader
 }
 
 // init
 func init() {
 	log = log2.New(os.Stdout, logPrefix, log2.LstdFlags|log2.Lshortfile)
-}
-
-// methods
-func (r *MyBinance) OnCreate(config *bot.Config) {
-	binance.UseTestnet = config.IsTest
-	wsKlineHandler := func(event *binance.WsKlineEvent) {
-		// pass result to expert Trader
-		r.expert.Record(convert(event), r.transform)
-	}
-
-	errHandler := func(err error) {
-		log.Println(err)
-	}
-
-	// try to connect to binance
-	doneC, _, err := binance.WsKlineServe(config.Pair, config.Period, wsKlineHandler, errHandler)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	<-doneC
 }
 
 // check if we can close this trade.
@@ -100,11 +131,10 @@ func parseString(value string) (float64, error) {
 	return strconv.ParseFloat(value, 64)
 }
 
-// functions
-func New(config *Config) bot.TradeBot {
-	return &MyBinance{
-		Client:    config.Client,
-		transform: config.Transform,
-		expert:    config.Expert,
+// NewBinanceTrader return a new instance of binance trader.
+func NewBinanceTrader(config Config) bot.Trader {
+	return &myBinance{
+		b:      config.Client,
+		expert: config.Expert,
 	}
 }

@@ -19,9 +19,9 @@ const (
 
 // var
 var (
-	activeTrades           map[Pair]*TradeParams
-	invalidSizeError       = errors.New("invalid size argument")
-	invalidSizeActionError = errors.New("invalid size for action argument")
+	activeTrades     map[Pair]*TradeParams
+	invalidSizeError = errors.New("invalid size argument")
+	//invalidSizeActionError = errors.New("invalid size for action argument")
 )
 
 // structs
@@ -62,7 +62,7 @@ type Config struct {
 	BuyAction       BuyAction
 	SellAction      SellAction
 	Storage         DataSource
-	CalculateAction []*CalculateAction
+	DefaultAnalysis []*CalculateAction
 }
 
 // interface to save and retrieve candles
@@ -126,7 +126,7 @@ func (s *system) Record(candle *Candle, transform Transform) {
 		}
 
 		if len(candles) != int(action.Size-1) {
-			s.log.Printf("Found len:%d, expected:%d\n", len(candles)+1, action.Size)
+			//s.log.Printf("Found len:%d, expected:%d\n", len(candles)+1, action.Size)
 			break
 		}
 
@@ -152,7 +152,7 @@ func (s *system) Record(candle *Candle, transform Transform) {
 	}
 
 	if len(dataset) != s.size {
-		s.log.Printf("invalid dataset size:%d expected:%d for:%s\n", len(dataset), s.size, candle.Pair)
+		//s.log.Printf("invalid dataset size:%d expected:%d for:%s\n", len(dataset), s.size, candle.Pair)
 		return
 	}
 
@@ -201,27 +201,18 @@ func (s *system) tryClosing(candle *Candle) {
 	}
 }
 
-// export
-func NewTrader(config *Config) (Trader, error) {
+// NewTrader returns a new Trader with logger enabled
+func NewTrader(config *Config) Trader {
 	return NewTraderWithLogger(config, log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile))
 }
 
-func NewTraderWithLogger(config *Config, logger *log.Logger) (Trader, error) {
-	if config.Size < minSize || config.Size > maxSize {
-		return nil, invalidSizeError
-	}
-
-	for _, i := range config.CalculateAction {
-		if i.Size < 1 {
-			return nil, invalidSizeActionError
-		}
-	}
+func NewTraderWithLogger(config *Config, logger *log.Logger) Trader {
 	return &system{
 		size:            config.Size,
 		datasource:      config.Storage,
 		buyAction:       config.BuyAction,
 		sellAction:      config.SellAction,
 		log:             logger,
-		calculateAction: config.CalculateAction,
-	}, nil
+		calculateAction: config.DefaultAnalysis,
+	}
 }

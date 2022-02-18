@@ -1,30 +1,30 @@
 package store
 
 import (
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
 )
 
 type BotData struct {
-	Others   map[string]float64 `json:"others"`
-	Candle   *Candle            `json:"candle"`
-	IsClosed bool               `json:"is_closed"`
-	Date     time.Time          `json:"date"`
-	Pair     string             `json:"pair"`
-	Id       bson.ObjectId      `json:"id" bson:"_id"`
+	Others   map[string]float64 `bson:"others"`
+	Candle   *Candle            `bson:"candle"`
+	IsClosed bool               `bson:"is_closed"`
+	Date     time.Time          `bson:"date"`
+	Pair     string             `bson:"pair"`
+	Id       primitive.ObjectID `bson:"_id"`
 }
 
 type Candle struct {
-	Open  float64 `json:"open"`
-	Close float64 `json:"close"`
-	High  float64 `json:"high"`
-	Low   float64 `json:"low"`
-	Vol   float64 `json:"vol"`
+	Open  float64 `bson:"open"`
+	Close float64 `bson:"close"`
+	High  float64 `bson:"high"`
+	Low   float64 `bson:"low"`
+	Vol   float64 `bson:"vol"`
 }
 
 type Database interface {
-	// save data
+	// Save date to database
 	Save(*BotData) error
-	// fetch a specific no of data
+	// Fetch retrieves record from database
 	Fetch(string, int) ([]*BotData, error)
 }

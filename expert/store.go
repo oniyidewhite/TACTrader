@@ -1,8 +1,8 @@
 package expert
 
 import (
-	"github.com/globalsign/mgo/bson"
 	"github.com/oblessing/artisgo/bot/store"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
 )
 
@@ -59,7 +59,7 @@ func (m *mapper) convertTo(candle *Candle) *store.BotData {
 		IsClosed: candle.Closed,
 		Date:     time.Unix(candle.Time/1000, 0),
 		Pair:     string(candle.Pair),
-		Id:       bson.NewObjectId(),
+		Id:       primitive.NewObjectID(),
 	}
 }
 

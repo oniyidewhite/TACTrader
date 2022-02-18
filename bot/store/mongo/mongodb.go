@@ -1,9 +1,12 @@
 package mongo
 
 import (
-	"github.com/globalsign/mgo"
+	"context"
 	"github.com/globalsign/mgo/bson"
 	"github.com/oblessing/artisgo/bot/store"
+	"github.com/oblessing/artisgo/common"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"os"
 )
@@ -16,7 +19,7 @@ const (
 )
 
 type MongoDBService struct {
-	collection *mgo.Collection
+	collection *mongo.Collection
 	log        *log.Logger
 }
 
@@ -26,23 +29,26 @@ type Config struct {
 
 // save data
 func (m MongoDBService) Save(data *store.BotData) error {
-	return m.collection.Insert(data)
+	_, err := m.collection.InsertOne(context.Background(), data)
+	return err
 }
 
 // fetch a specific no of data
 func (m MongoDBService) Fetch(pair string, size int) ([]*store.BotData, error) {
-	data := []*store.BotData{}
-	err := m.collection.Find(bson.M{"pair": pair}).Sort("-date").Limit(size).All(&data)
+	ctx := context.Background()
+	var data []*store.BotData
+	r, err := m.collection.Find(ctx, bson.M{"pair": pair}, options.Find().SetSort(bson.M{"date": -1}).SetLimit(int64(size)))
 
+	err = r.All(ctx, &data)
 	return data, err
 }
 
-func startMongoService(config *Config) (*mgo.Collection, error) {
-	session, err := mgo.Dial(config.url)
+func startMongoService(config *Config) (*mongo.Collection, error) {
+	session, err := common.NewDriver(config.url)
 	if err != nil {
 		return nil, err
 	}
-	return session.DB(config.db).C(config.collection), nil
+	return session.Database(config.db).Collection(config.collection), nil
 }
 
 func NewMongoInstance(url string) (store.Database, error) {

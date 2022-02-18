@@ -32,38 +32,6 @@ func TestExpertSystem(t *testing.T) {
 	dataSource := NewMemoryStore()
 	dataSource.cleanup()
 
-	t.Run("Should throw error if size is 0", func(t *testing.T) {
-		action := func(params *TradeParams) bool {
-			return false
-		}
-		_, err := NewTrader(&Config{
-			Size:       0,
-			BuyAction:  action,
-			SellAction: nil,
-			Storage:    nil,
-		})
-		if err == nil {
-			t.FailNow()
-		}
-	})
-	t.Run("Should create new instance of system if params are valid", func(t *testing.T) {
-		action := func(params *TradeParams) bool {
-			return false
-		}
-		result, err := NewTrader(&Config{
-			Size:       2,
-			BuyAction:  action,
-			SellAction: nil,
-			Storage:    nil,
-		})
-		if err != nil {
-			t.FailNow()
-		}
-
-		if result == nil {
-			t.FailNow()
-		}
-	})
 	t.Run("Transform should only be called when candle is closed, transform must contain the required no of slice", func(t *testing.T) {
 		action := func(params *TradeParams) bool {
 			return false
@@ -71,15 +39,12 @@ func TestExpertSystem(t *testing.T) {
 
 		var pair Pair = "test"
 
-		result, err := NewTrader(&Config{
+		result := NewTrader(&Config{
 			Size:       2,
 			BuyAction:  action,
 			SellAction: nil,
 			Storage:    dataSource,
 		})
-		if err != nil {
-			t.FailNow()
-		}
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet
@@ -101,15 +66,12 @@ func TestExpertSystem(t *testing.T) {
 
 		var pair Pair = "test"
 
-		result, err := NewTrader(&Config{
+		result := NewTrader(&Config{
 			Size:       2,
 			BuyAction:  action,
 			SellAction: nil,
 			Storage:    dataSource,
 		})
-		if err != nil {
-			t.FailNow()
-		}
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet
@@ -142,16 +104,12 @@ func TestExpertSystem(t *testing.T) {
 
 		var pair Pair = "test"
 
-		result, err := NewTrader(&Config{
+		result := NewTrader(&Config{
 			Size:       2,
 			BuyAction:  action,
 			SellAction: nil,
 			Storage:    dataSource,
 		})
-		if err != nil {
-			t.FailNow()
-		}
-
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet
 			t.FailNow()
@@ -202,15 +160,12 @@ func TestExpertSystem(t *testing.T) {
 			return true
 		}
 
-		result, err := NewTrader(&Config{
+		result := NewTrader(&Config{
 			Size:       1,
 			BuyAction:  buyAction,
 			SellAction: sellAction,
 			Storage:    dataSource,
 		})
-		if err != nil {
-			t.FailNow()
-		}
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet
@@ -265,15 +220,12 @@ func TestExpertSystem(t *testing.T) {
 			return true
 		}
 
-		result, err := NewTrader(&Config{
+		result := NewTrader(&Config{
 			Size:       1,
 			BuyAction:  buyAction,
 			SellAction: sellAction,
 			Storage:    dataSource,
 		})
-		if err != nil {
-			t.FailNow()
-		}
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet
@@ -319,12 +271,12 @@ func TestExpertSystem(t *testing.T) {
 			return true
 		}
 
-		result, err := NewTrader(&Config{
+		result := NewTrader(&Config{
 			Size:       2,
 			BuyAction:  buyAction,
 			SellAction: sellAction,
 			Storage:    dataSource,
-			CalculateAction: []*CalculateAction{
+			DefaultAnalysis: []*CalculateAction{
 				{
 					Name: "k",
 					Size: 2,
@@ -334,9 +286,6 @@ func TestExpertSystem(t *testing.T) {
 				},
 			},
 		})
-		if err != nil {
-			t.FailNow()
-		}
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet

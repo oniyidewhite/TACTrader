@@ -3,13 +3,14 @@ package mongo
 import (
 	"github.com/globalsign/mgo/bson"
 	"github.com/oblessing/artisgo/bot/store"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"math/rand"
 	"os"
 	"testing"
 )
 
-const mongoUri = "mongodb://admin:password@127.0.0.1:27017/admin"
+const mongoUri = "mongodb://user:password@localhost:27017"
 
 var (
 	config = &Config{
@@ -52,7 +53,7 @@ func TestMongoDBService_Save(t *testing.T) {
 		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   "test",
-		Id:     bson.NewObjectId(),
+		Id:     primitive.NewObjectID(),
 	})
 
 	if err != nil {
@@ -69,27 +70,27 @@ func TestMongoDBService_SaveAndRetrieve(t *testing.T) {
 		t.Fatalf("Unable to initialize mongo service: %+v", err)
 	}
 
-	ids := []bson.ObjectId{bson.NewObjectId(), bson.NewObjectId()}
+	ids := []primitive.ObjectID{primitive.NewObjectID(), primitive.NewObjectID()}
 
 	err = service.Save(&store.BotData{
 		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId(),
+		Id:     primitive.NewObjectID(),
 	})
 
 	err = service.Save(&store.BotData{
 		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId(),
+		Id:     primitive.NewObjectID(),
 	})
 
 	err = service.Save(&store.BotData{
 		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId(),
+		Id:     primitive.NewObjectID(),
 	})
 
 	err = service.Save(&store.BotData{
@@ -119,7 +120,7 @@ func TestMongoDBService_SaveAndRetrieve(t *testing.T) {
 		t.Fatalf("Only 2 records should be returned: %+v", err)
 	}
 
-	data := []bson.ObjectId{}
+	var data []primitive.ObjectID
 	for _, v := range records {
 		data = append(data, v.Id)
 	}
@@ -142,27 +143,27 @@ func TestMongoDBService_SaveAndRetrieveOtherData(t *testing.T) {
 		t.Fatalf("Unable to initialize mongo service: %+v", err)
 	}
 
-	ids := []bson.ObjectId{bson.NewObjectId(), bson.NewObjectId()}
+	ids := []primitive.ObjectID{primitive.NewObjectID(), primitive.NewObjectID()}
 
 	err = service.Save(&store.BotData{
 		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId(),
+		Id:     primitive.NewObjectID(),
 	})
 
 	err = service.Save(&store.BotData{
 		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId(),
+		Id:     primitive.NewObjectID(),
 	})
 
 	err = service.Save(&store.BotData{
 		Candle: randomCandle(),
 		Date:   bson.Now(),
 		Pair:   pair,
-		Id:     bson.NewObjectId(),
+		Id:     primitive.NewObjectID(),
 	})
 
 	err = service.Save(&store.BotData{
