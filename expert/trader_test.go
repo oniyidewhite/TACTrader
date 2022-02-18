@@ -1,6 +1,7 @@
 package expert
 
 import (
+	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
 )
@@ -50,7 +51,7 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.FailNow()
 			return &TradeParams{}
-		})
+		}, "4")
 	})
 	t.Run("Transform should not open any new trade until current one is closed", func(t *testing.T) {
 		dataSource.cleanup()
@@ -77,7 +78,7 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.FailNow()
 			return &TradeParams{}
-		})
+		}, "4")
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			return &TradeParams{
@@ -87,7 +88,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       22,
 				Pair:         pair,
 			}
-		})
+		}, "4")
 
 	})
 	t.Run("Transform should open a new trade after current one is closed", func(t *testing.T) {
@@ -114,7 +115,7 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.FailNow()
 			return &TradeParams{}
-		})
+		}, "4")
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			return &TradeParams{
@@ -124,7 +125,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       22,
 				Pair:         pair,
 			}
-		})
+		}, "4")
 
 		result.TradeClosed(pair)
 
@@ -136,7 +137,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       22,
 				Pair:         pair,
 			}
-		})
+		}, "4")
 	})
 	t.Run("Confirm stop loss works fine", func(t *testing.T) {
 		var pair Pair = "test"
@@ -176,7 +177,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		})
+		}, "4")
 
 		result.Record(&Candle{
 			Pair:   "test",
@@ -196,7 +197,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		})
+		}, "4")
 	})
 	t.Run("Confirm take profit works fine", func(t *testing.T) {
 		var pair Pair = "test"
@@ -207,6 +208,7 @@ func TestExpertSystem(t *testing.T) {
 			if params.Pair != pair {
 				t.Fatalf("Invalid dataset")
 			}
+			assert.Equal(t, params.TradeSize, "4")
 			return true
 		}
 
@@ -236,7 +238,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		})
+		}, "4")
 
 		result.Record(&Candle{
 			Pair:   "test",
@@ -256,7 +258,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		})
+		}, "4")
 	})
 	t.Run("Test action logic to calculate some data", func(t *testing.T) {
 		var pair Pair = "test"
@@ -291,11 +293,11 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.Fatalf("This function shouldn't be called")
 			return &TradeParams{}
-		})
+		}, "4")
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			return &TradeParams{}
-		})
+		}, "4")
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet
@@ -309,7 +311,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		})
+		}, "4")
 	})
 }
 

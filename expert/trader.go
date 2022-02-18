@@ -46,6 +46,7 @@ type TradeParams struct {
 	OpenTradeAt  float64
 	TakeProfitAt float64
 	StopLossAt   float64
+	TradeSize    string
 	Rating       int
 	Pair         Pair
 }
@@ -95,7 +96,7 @@ type system struct {
 }
 
 type Trader interface {
-	Record(candle *Candle, transform Transform)
+	Record(candle *Candle, transform Transform, tradeSize string)
 	TradeClosed(pair Pair)
 	OnError(error)
 }
@@ -110,7 +111,7 @@ func (c *Candle) IsUp() bool {
 	return c.Close > c.Open
 }
 
-func (s *system) Record(candle *Candle, transform Transform) {
+func (s *system) Record(candle *Candle, transform Transform, tradeSize string) {
 	if !candle.Closed {
 		//Still actively traded
 		s.tryClosing(candle)
@@ -157,6 +158,9 @@ func (s *system) Record(candle *Candle, transform Transform) {
 	}
 
 	result := transform(dataset)
+	result.TradeSize = tradeSize
+
+	// TODO: Use machine learning.
 	if result.Rating > thresholdMin && result.Rating < thresholdMax {
 		// Call next function
 		if s.buyAction(result) {

@@ -59,7 +59,7 @@ func (r *myBinance) StartTrading() error {
 			go func() {
 				wsKlineHandler := func(event *binance.WsKlineEvent) {
 					// pass result to expert Trader
-					r.expert.Record(convert(event), p.Strategy)
+					r.expert.Record(convert(event), p.Strategy, p.TradeSize)
 				}
 
 				// We restart if we encounter an error.
