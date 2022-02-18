@@ -5,7 +5,6 @@ import (
 	"github.com/oblessing/artisgo/bot"
 	"github.com/oblessing/artisgo/expert"
 	"github.com/stretchr/testify/assert"
-	"sync"
 	"testing"
 	"time"
 )
@@ -59,37 +58,6 @@ func Test_convert(t *testing.T) {
 			Closed:    true,
 		}, got)
 	})
-}
-
-func Test_myBinance_StartTrading(t *testing.T) {
-	type fields struct {
-		b          *binance.Client
-		pairs      []bot.PairConfig
-		hasStarted bool
-		state      sync.Once
-		expert     expert.Trader
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := &myBinance{
-				b:          tt.fields.b,
-				pairs:      tt.fields.pairs,
-				hasStarted: tt.fields.hasStarted,
-				state:      tt.fields.state,
-				expert:     tt.fields.expert,
-			}
-			if err := r.StartTrading(); (err != nil) != tt.wantErr {
-				t.Errorf("StartTrading() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
 }
 
 func Test_myBinance_WatchAndTrade(t *testing.T) {
