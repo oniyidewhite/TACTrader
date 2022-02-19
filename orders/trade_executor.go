@@ -32,10 +32,13 @@ var TradeList = []trade.PairConfig{
 		Strategy: trade.MyOldCustomTransform,
 	},
 	{
-		Pair:      "DOGEEUR",
-		Period:    "1m",
-		Strategy:  trade.MyOldCustomTransform,
-		TradeSize: "2",
+		Pair:           "DOGEEUR",
+		Period:         "1m",
+		LotSize:        0.0005,
+		RatioToOne:     3,
+		OverrideParams: true,
+		Strategy:       trade.MyOldCustomTransform,
+		TradeSize:      "318",
 	},
 	{
 		Pair:     "XRPUSDT",
@@ -56,6 +59,7 @@ func Buy(params *expert.TradeParams) bool {
 		zap.Any("TradeSize", params.TradeSize),
 		zap.Float64("OpenTradeAt", params.OpenTradeAt),
 		zap.Float64("TakeProfitAt", params.TakeProfitAt),
+		zap.Float64("StopLossAt", params.StopLossAt),
 		zap.Int("Rating", params.Rating))
 
 	switch params.Pair {
@@ -87,7 +91,7 @@ func Buy(params *expert.TradeParams) bool {
 func Sell(params *expert.SellParams) bool {
 	ctx := context.Background()
 
-	logger.With(ctx,
+	ctx = logger.With(ctx,
 		zap.Any("Pair", params.Pair),
 		zap.Bool("IsStopLoss", params.IsStopLoss),
 		zap.Float64("SellTradeAt", params.SellTradeAt),

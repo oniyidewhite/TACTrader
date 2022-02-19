@@ -6,9 +6,12 @@ import (
 	"testing"
 )
 
+//TODO: Revamp test
 type memoryStorage struct {
 	store map[Pair][]*Candle
 }
+
+var recordConfig RecordConfig
 
 func (m *memoryStorage) FetchCandles(pair Pair, size int) ([]*Candle, error) {
 	c := m.store[pair]
@@ -25,6 +28,7 @@ func (m *memoryStorage) Persist(candle *Candle) error {
 }
 
 func (m *memoryStorage) cleanup() {
+	recordConfig = RecordConfig{}
 	m.store = map[Pair][]*Candle{}
 }
 
@@ -51,7 +55,7 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.FailNow()
 			return &TradeParams{}
-		}, "4")
+		}, recordConfig)
 	})
 	t.Run("Transform should not open any new trade until current one is closed", func(t *testing.T) {
 		dataSource.cleanup()
@@ -78,7 +82,7 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.FailNow()
 			return &TradeParams{}
-		}, "4")
+		}, recordConfig)
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			return &TradeParams{
@@ -88,7 +92,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       22,
 				Pair:         pair,
 			}
-		}, "4")
+		}, recordConfig)
 
 	})
 	t.Run("Transform should open a new trade after current one is closed", func(t *testing.T) {
@@ -115,7 +119,7 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.FailNow()
 			return &TradeParams{}
-		}, "4")
+		}, recordConfig)
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			return &TradeParams{
@@ -125,7 +129,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       22,
 				Pair:         pair,
 			}
-		}, "4")
+		}, recordConfig)
 
 		result.TradeClosed(pair)
 
@@ -137,7 +141,66 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       22,
 				Pair:         pair,
 			}
-		}, "4")
+		}, recordConfig)
+	})
+	t.Run("TShould be able to open trade with only the required specs", func(t *testing.T) {
+		dataSource.cleanup()
+		count := 0
+
+		recordConfig := RecordConfig{
+			LotSize:        2,
+			RatioToOne:     2,
+			OverrideParams: true,
+			TradeSize:      "100",
+		}
+
+		action := func(params *TradeParams) bool {
+			assert.Equal(t, params.StopLossAt, float64(-2))
+			assert.Equal(t, params.TakeProfitAt, float64(4))
+			assert.Equal(t, params.TradeSize, "100")
+			// open trade when called
+			if count > 1 {
+				t.FailNow()
+			}
+			count++
+			return true
+		}
+
+		var pair Pair = "test"
+
+		result := NewTrader(&Config{
+			Size:       2,
+			BuyAction:  action,
+			SellAction: nil,
+			Storage:    dataSource,
+		})
+		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
+			// We should not call this function yet
+			t.FailNow()
+			return &TradeParams{}
+		}, recordConfig)
+
+		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
+			return &TradeParams{
+				OpenTradeAt:  0,
+				TakeProfitAt: 9,
+				StopLossAt:   0,
+				Rating:       22,
+				Pair:         pair,
+			}
+		}, recordConfig)
+
+		result.TradeClosed(pair)
+
+		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
+			return &TradeParams{
+				OpenTradeAt:  0,
+				TakeProfitAt: 9,
+				StopLossAt:   0,
+				Rating:       30,
+				Pair:         pair,
+			}
+		}, recordConfig)
 	})
 	t.Run("Confirm stop loss works fine", func(t *testing.T) {
 		var pair Pair = "test"
@@ -177,7 +240,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		}, "4")
+		}, recordConfig)
 
 		result.Record(&Candle{
 			Pair:   "test",
@@ -197,10 +260,11 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		}, "4")
+		}, recordConfig)
 	})
 	t.Run("Confirm take profit works fine", func(t *testing.T) {
 		var pair Pair = "test"
+		recordConfig := RecordConfig{TradeSize: "4"}
 
 		dataSource = NewMemoryStore()
 		dataSource.cleanup()
@@ -238,7 +302,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		}, "4")
+		}, recordConfig)
 
 		result.Record(&Candle{
 			Pair:   "test",
@@ -258,7 +322,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		}, "4")
+		}, recordConfig)
 	})
 	t.Run("Test action logic to calculate some data", func(t *testing.T) {
 		var pair Pair = "test"
@@ -293,11 +357,11 @@ func TestExpertSystem(t *testing.T) {
 			// We should not call this function yet
 			t.Fatalf("This function shouldn't be called")
 			return &TradeParams{}
-		}, "4")
+		}, recordConfig)
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			return &TradeParams{}
-		}, "4")
+		}, recordConfig)
 
 		result.Record(NewRandomCandle(pair), func(candles []*Candle) *TradeParams {
 			// We should not call this function yet
@@ -311,7 +375,7 @@ func TestExpertSystem(t *testing.T) {
 				Rating:       33,
 				Pair:         "test",
 			}
-		}, "4")
+		}, recordConfig)
 	})
 }
 

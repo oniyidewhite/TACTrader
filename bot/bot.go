@@ -30,10 +30,14 @@ type Args struct {
 
 // PairConfig represent a crypto pair configuration
 type PairConfig struct {
-	Pair            string
-	Period          string
-	TradeSize       string // To buy or short.
-	Strategy        expert.Transform
+	Pair       string
+	Period     string
+	TradeSize  string // To buy or short.
+	Strategy   expert.Transform
+	LotSize    float64
+	RatioToOne float64
+	// Override expert stop & take profit with config info
+	OverrideParams  bool
 	DisableStopLoss bool
 }
 

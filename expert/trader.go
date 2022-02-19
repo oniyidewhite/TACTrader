@@ -99,8 +99,16 @@ type system struct {
 	calculateAction []*CalculateAction
 }
 
+type RecordConfig struct {
+	LotSize    float64
+	RatioToOne float64
+	// Override expert stop & take profit with config info
+	OverrideParams bool
+	TradeSize      string
+}
+
 type Trader interface {
-	Record(candle *Candle, transform Transform, tradeSize string)
+	Record(candle *Candle, transform Transform, config RecordConfig)
 	TradeClosed(pair Pair)
 	OnError(error)
 }
@@ -115,10 +123,12 @@ func (c *Candle) IsUp() bool {
 	return c.Close > c.Open
 }
 
-func (s *system) Record(candle *Candle, transform Transform, tradeSize string) {
+func (s *system) Record(candle *Candle, transform Transform, config RecordConfig) {
+	//Try checking if we need to close any trade
+	s.tryClosing(candle)
+
+	// Check if the time is still running
 	if !candle.Closed {
-		//Still actively traded
-		s.tryClosing(candle)
 		return
 	}
 
@@ -131,7 +141,6 @@ func (s *system) Record(candle *Candle, transform Transform, tradeSize string) {
 		}
 
 		if len(candles) != int(action.Size-1) {
-			//s.log.Printf("Found len:%d, expected:%d\n", len(candles)+1, action.Size)
 			break
 		}
 
@@ -140,13 +149,7 @@ func (s *system) Record(candle *Candle, transform Transform, tradeSize string) {
 
 	// persist the new candle
 	if err := s.datasource.Persist(candle); err != nil {
-		s.log.Println(err)
-		return
-	}
-
-	if _, ok := activeTrades[candle.Pair]; ok {
-		// we currently have an active trade
-		s.tryClosing(candle)
+		s.log.Printf("Error saving record :%+v", err)
 		return
 	}
 
@@ -157,12 +160,18 @@ func (s *system) Record(candle *Candle, transform Transform, tradeSize string) {
 	}
 
 	if len(dataset) != s.size {
-		//s.log.Printf("invalid dataset size:%d expected:%d for:%s\n", len(dataset), s.size, candle.Pair)
 		return
 	}
 
 	result := transform(dataset)
-	result.TradeSize = tradeSize
+	result.TradeSize = config.TradeSize
+
+	if config.OverrideParams {
+		stopLoss := result.OpenTradeAt - config.LotSize
+		takeProfit := result.OpenTradeAt + (config.LotSize * config.RatioToOne)
+		result.TakeProfitAt = takeProfit
+		result.StopLossAt = stopLoss
+	}
 
 	// TODO: Use machine learning.
 	if result.Rating > thresholdMin && result.Rating < thresholdMax {
@@ -184,7 +193,7 @@ func (s *system) OnError(err error) {
 func (s *system) tryClosing(candle *Candle) {
 	params, ok := activeTrades[candle.Pair]
 	if !ok {
-		// we currently have an active trade
+		// we currently  don't have an active trade
 		return
 	}
 
