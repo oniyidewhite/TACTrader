@@ -153,6 +153,12 @@ func (s *system) Record(candle *Candle, transform Transform, config RecordConfig
 		return
 	}
 
+	// Check if we have open trade.
+	// TODO: support opening of multiple positions.
+	if _, ok := activeTrades[candle.Pair]; ok {
+		return
+	}
+
 	dataset, err := s.datasource.FetchCandles(candle.Pair, s.size)
 	if err != nil {
 		s.log.Println(err)
@@ -196,6 +202,7 @@ func (s *system) tryClosing(candle *Candle) {
 		// we currently  don't have an active trade
 		return
 	}
+	s.log.Printf("%v: current:%v, stoploss:%v takeprofit:%v ", candle.Pair, candle.Close, params.StopLossAt, params.TakeProfitAt)
 
 	if candle.Close <= params.StopLossAt {
 		if s.sellAction(&SellParams{
