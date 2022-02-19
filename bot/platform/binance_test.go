@@ -12,7 +12,6 @@ import (
 func TestNew(t *testing.T) {
 	t.Run("should return error if nil", func(t *testing.T) {
 		got := NewBinanceTrader(Config{
-			Client: nil,
 			Expert: nil,
 		})
 		assert.NotNil(t, got)

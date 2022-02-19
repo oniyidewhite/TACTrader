@@ -43,12 +43,12 @@ type Candle struct {
 
 // Struct for initiating a trade
 type TradeParams struct {
-	OpenTradeAt  float64
-	TakeProfitAt float64
-	StopLossAt   float64
-	TradeSize    string
-	Rating       int
-	Pair         Pair
+	OpenTradeAt  float64 `json:"open_trade_at"`
+	TakeProfitAt float64 `json:"take_profit_at"`
+	StopLossAt   float64 `json:"stop_loss_at"`
+	TradeSize    string  `json:"trade_size"`
+	Rating       int     `json:"rating"`
+	Pair         Pair    `json:"pair"`
 }
 
 type SellParams struct {

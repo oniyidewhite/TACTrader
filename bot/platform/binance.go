@@ -19,8 +19,6 @@ var log *log2.Logger
 
 // myBinance represent My Binance API configuration
 type myBinance struct {
-	// Allows us to buy and sell symbol
-	b *binance.Client
 	// Crypto pairs we are watching
 	pairs []bot.PairConfig
 	// Know if the trading bot has started trading
@@ -82,7 +80,6 @@ func (r *myBinance) StartTrading() error {
 }
 
 type Config struct {
-	Client *binance.Client
 	Expert expert.Trader
 }
 
@@ -134,7 +131,6 @@ func parseString(value string) (float64, error) {
 // NewBinanceTrader return a new instance of binance trader.
 func NewBinanceTrader(config Config) bot.Trader {
 	return &myBinance{
-		b:      config.Client,
 		expert: config.Expert,
 	}
 }

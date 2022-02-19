@@ -7,17 +7,16 @@ import (
 	"github.com/oblessing/artisgo/bot/store"
 	"github.com/oblessing/artisgo/bot/store/mongo"
 	"github.com/oblessing/artisgo/expert"
+	"github.com/oblessing/artisgo/orders"
 	log2 "log"
 	"os"
 )
 
 // this params would be injected
 var (
-	binanceApiKey    = ""
-	binanceSecretKey = ""
-	DatabaseUri      = "mongodb://user:password@localhost:27017"
-	logger           *log2.Logger
-	logPrefix        = "app:\t"
+	DatabaseUri = "mongodb://user:password@localhost:27017"
+	logger      *log2.Logger
+	logPrefix   = "app:\t"
 )
 
 func init() {
@@ -32,66 +31,22 @@ func main() {
 	}
 
 	// Build Expert trader
-	trader := buildBinanceTrader(false, storage, buy, sell, trade.GetDefaultAnalysis(), binanceApiKey, binanceSecretKey)
+	trader := buildBinanceTrader(false, storage, orders.Buy, orders.Sell, trade.GetDefaultAnalysis())
 
 	// create all the supported symbols
-	if err = trader.WatchAndTrade(
-		trade.PairConfig{
-			Pair:     "BNBEUR",
-			Period:   "1m",
-			Strategy: trade.MyOldCustomTransform,
-		},
-		trade.PairConfig{
-			Pair:     "ETHEUR",
-			Period:   "1m",
-			Strategy: trade.MyOldCustomTransform,
-		},
-		trade.PairConfig{
-			Pair:     "TRXEUR",
-			Period:   "1m",
-			Strategy: trade.MyOldCustomTransform,
-		},
-		trade.PairConfig{
-			Pair:      "DOGEEUR",
-			Period:    "1m",
-			Strategy:  trade.MyOldCustomTransform,
-			TradeSize: "2",
-		}); err != nil {
+	if err = trader.WatchAndTrade(orders.TradeList...); err != nil {
 		logger.Fatal(err)
 	}
-
-	//watchlist = append(watchlist, &trade.PairConfig{
-	//	Pair:   "XRPUSDT",
-	//	Period: "1h",
-	//	IsTest: false,
-	//})
-	//
 
 	if err = trader.StartTrading(); err != nil {
 		logger.Fatal(err)
 	}
 }
 
-func buy(params *expert.TradeParams) bool {
-	// TODO: Connect to binance API
-	logger.Printf("(%s): Buy-At:%f\n", params.Pair, params.OpenTradeAt)
-	return true
-}
-func sell(params *expert.SellParams) bool {
-	// TODO: Connect to binance API
-	if params.IsStopLoss {
-		logger.Printf("(%s): Stop-Loss:%f\n", params.Pair, params.PL)
-	} else {
-		logger.Printf("(%s): Take-Profit:%f\n", params.Pair, params.PL)
-	}
-	return true
-}
-
-func buildBinanceTrader(testMode bool, storage store.Database, buyAction expert.BuyAction, sellAction expert.SellAction, defaultAnalysis []*expert.CalculateAction, binanceApiKey string, binanceSecretKey string) trade.Trader {
+func buildBinanceTrader(testMode bool, storage store.Database, buyAction expert.BuyAction, sellAction expert.SellAction, defaultAnalysis []*expert.CalculateAction) trade.Trader {
 	binance.UseTestnet = testMode
 
 	return platform.NewBinanceTrader(platform.Config{
-		Client: binance.NewClient(binanceApiKey, binanceSecretKey),
 		Expert: expert.NewTrader(&expert.Config{
 			Size:            18, //TODO: should be tied to strategy
 			BuyAction:       buyAction,
