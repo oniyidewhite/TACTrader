@@ -2,6 +2,7 @@ package orders
 
 import (
 	"context"
+	"fmt"
 	"github.com/adshao/go-binance/v2"
 	trade "github.com/oblessing/artisgo/bot"
 	"github.com/oblessing/artisgo/expert"
@@ -13,8 +14,6 @@ var binanceApiKey = ""
 var binanceSecretKey = ""
 
 var client *binance.Client
-
-var pendingTrades = map[string]int64{}
 
 var TradeList = []trade.PairConfig{
 	{
@@ -62,15 +61,21 @@ func Buy(params *expert.TradeParams) bool {
 	switch params.Pair {
 	case "":
 		// TODO: ADD our checks
-		res, err := client.NewCreateOrderService().Do(context.Background())
+		res, err := client.NewCreateOrderService().
+			Symbol(string(params.Pair)).
+			Side(binance.SideTypeBuy).
+			Price(fmt.Sprintf("%v", params.OpenTradeAt)).
+			Quantity(params.TradeSize).
+			TimeInForce(binance.TimeInForceTypeGTC).
+			Type(binance.OrderTypeLimit).
+			Do(context.Background())
 		if err != nil {
 			logger.Error(ctx, "error placing order", zap.Error(err))
 			return false
 		}
 
-		ctx = logger.With(ctx, zap.Int64("order_id", res.OrderID))
-
-		pendingTrades[string(params.Pair)] = res.OrderID
+		params.OrderID = res.OrderID
+		ctx = logger.With(ctx, zap.Int64("order_id", params.OrderID))
 	default:
 		logger.Info(ctx, "buyAction not supported: marked a buy order")
 		return true
@@ -86,10 +91,25 @@ func Sell(params *expert.SellParams) bool {
 		zap.Any("Pair", params.Pair),
 		zap.Bool("IsStopLoss", params.IsStopLoss),
 		zap.Float64("SellTradeAt", params.SellTradeAt),
+		zap.Int64("OrderID", params.OrderID),
 		zap.Float64("PL", params.PL),
 	)
 	switch params.Pair {
 	case "":
+		// TODO: ADD our checks
+		res, err := client.NewCreateOrderService().
+			Symbol(string(params.Pair)).
+			Side(binance.SideTypeSell).
+			Price(fmt.Sprintf("%v", params.SellTradeAt)).
+			Quantity(params.TradeSize).
+			TimeInForce(binance.TimeInForceTypeGTC).
+			Type(binance.OrderTypeLimit).
+			Do(context.Background())
+		if err != nil {
+			logger.Error(ctx, "error placing order", zap.Error(err))
+			return false
+		}
+		ctx = logger.With(ctx, zap.Int64("sell_order_id", res.OrderID))
 
 	default:
 		if params.IsStopLoss {

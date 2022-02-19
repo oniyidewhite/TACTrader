@@ -19,6 +19,7 @@ const (
 
 // var
 var (
+	// TODO: Add support for placing multiple trades
 	activeTrades     map[Pair]*TradeParams
 	invalidSizeError = errors.New("invalid size argument")
 	//invalidSizeActionError = errors.New("invalid size for action argument")
@@ -44,6 +45,7 @@ type Candle struct {
 // Struct for initiating a trade
 type TradeParams struct {
 	OpenTradeAt  float64 `json:"open_trade_at"`
+	OrderID      int64   `json:"order_id"`
 	TakeProfitAt float64 `json:"take_profit_at"`
 	StopLossAt   float64 `json:"stop_loss_at"`
 	TradeSize    string  `json:"trade_size"`
@@ -55,6 +57,8 @@ type SellParams struct {
 	IsStopLoss  bool
 	SellTradeAt float64
 	PL          float64
+	OrderID     int64
+	TradeSize   string
 	Pair        Pair
 }
 
@@ -187,18 +191,22 @@ func (s *system) tryClosing(candle *Candle) {
 	if candle.Close <= params.StopLossAt {
 		if s.sellAction(&SellParams{
 			IsStopLoss:  true,
-			SellTradeAt: params.TakeProfitAt,
-			PL:          params.StopLossAt - params.OpenTradeAt,
+			SellTradeAt: candle.Close,
+			PL:          candle.Close - params.OpenTradeAt,
 			Pair:        candle.Pair,
+			TradeSize:   params.TradeSize,
+			OrderID:     params.OrderID,
 		}) {
 			s.TradeClosed(candle.Pair)
 		}
 	} else if candle.Close >= params.TakeProfitAt {
 		if s.sellAction(&SellParams{
 			IsStopLoss:  false,
-			SellTradeAt: params.TakeProfitAt,
-			PL:          params.TakeProfitAt - params.OpenTradeAt,
+			SellTradeAt: candle.Close,
+			PL:          candle.Close - params.OpenTradeAt,
 			Pair:        candle.Pair,
+			TradeSize:   params.TradeSize,
+			OrderID:     params.OrderID,
 		}) {
 			s.TradeClosed(candle.Pair)
 		}
