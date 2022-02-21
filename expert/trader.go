@@ -1,7 +1,10 @@
 package expert
 
 import (
+	"context"
 	"errors"
+	"github.com/oblessing/artisgo/logger"
+	"go.uber.org/zap"
 	"log"
 	"os"
 )
@@ -10,9 +13,6 @@ import (
 const (
 	thresholdMin = 23
 	thresholdMax = 40
-
-	minSize = 1
-	maxSize = 180
 
 	logPrefix = "ea:\t"
 )
@@ -77,7 +77,7 @@ type DataSource interface {
 }
 
 // function for analyze the data set, returns a %value, if the trade is worth taking
-type Transform func([]*Candle) *TradeParams
+type Transform func(ctx context.Context, candles []*Candle) *TradeParams
 
 type BuyAction func(*TradeParams) bool
 type SellAction func(*SellParams) bool
@@ -100,6 +100,7 @@ type system struct {
 }
 
 type RecordConfig struct {
+	Spread     float64
 	LotSize    float64
 	RatioToOne float64
 	// Override expert stop & take profit with config info
@@ -124,8 +125,14 @@ func (c *Candle) IsUp() bool {
 }
 
 func (s *system) Record(candle *Candle, transform Transform, config RecordConfig) {
+	ctx := context.Background()
 	//Try checking if we need to close any trade
 	s.tryClosing(candle)
+	// Check if we can buy
+	if err := s.tryBuying(ctx, candle, transform, config); err != nil {
+		logger.Error(ctx, "error with try to buy", zap.Error(err))
+		return
+	}
 
 	// Check if the time is still running
 	if !candle.Closed {
@@ -169,7 +176,16 @@ func (s *system) Record(candle *Candle, transform Transform, config RecordConfig
 		return
 	}
 
-	result := transform(dataset)
+	s.processBuy(ctx, candle, transform, config, dataset)
+}
+
+func (s *system) processBuy(ctx context.Context, candle *Candle, transform Transform, config RecordConfig, dataset []*Candle) {
+	ctx = context.WithValue(ctx, "spread", config.Spread)
+	result := transform(ctx, dataset)
+	// Check if we can act on the data
+	if result == nil {
+		return
+	}
 	result.TradeSize = config.TradeSize
 
 	if config.OverrideParams {
@@ -202,7 +218,6 @@ func (s *system) tryClosing(candle *Candle) {
 		// we currently  don't have an active trade
 		return
 	}
-	s.log.Printf("%v: current:%v, stoploss:%v takeprofit:%v ", candle.Pair, candle.Close, params.StopLossAt, params.TakeProfitAt)
 
 	if candle.Close <= params.StopLossAt {
 		if s.sellAction(&SellParams{
@@ -227,6 +242,22 @@ func (s *system) tryClosing(candle *Candle) {
 			s.TradeClosed(candle.Pair)
 		}
 	}
+}
+
+func (s *system) tryBuying(ctx context.Context, candle *Candle, transform Transform, config RecordConfig) error {
+	if candle.Closed {
+		return nil
+	}
+
+	//TODO: Add support for multiple open trades for a single pair
+	if _, ok := activeTrades[candle.Pair]; ok {
+		return nil
+	}
+
+	// Check if we can buy
+	s.processBuy(ctx, candle, transform, config, []*Candle{candle})
+
+	return nil
 }
 
 // NewTrader returns a new Trader with logger enabled

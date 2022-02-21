@@ -1,14 +1,18 @@
 package platform
 
 import (
+	"context"
 	"errors"
 	"github.com/adshao/go-binance/v2"
 	"github.com/oblessing/artisgo/bot"
 	"github.com/oblessing/artisgo/expert"
+	"github.com/oblessing/artisgo/logger"
+	"go.uber.org/zap"
 	log2 "log"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 )
 
 const (
@@ -51,6 +55,8 @@ func (r *myBinance) StartTrading() error {
 			log.Println(err)
 		}
 
+		ctx := context.Background()
+
 		// Start all the current pairs
 		for _, p := range r.pairs {
 			p := p
@@ -62,15 +68,18 @@ func (r *myBinance) StartTrading() error {
 						RatioToOne:     p.RatioToOne,
 						OverrideParams: p.OverrideParams,
 						TradeSize:      p.TradeSize,
+						Spread:         p.Spread,
 					})
 				}
 
 				// We restart if we encounter an error.
 				for {
+					logger.Info(ctx, "starting watcher", zap.String("pair", p.Pair), zap.String("period", p.Period))
 					doneC, _, err := binance.WsKlineServe(p.Pair, p.Period, wsKlineHandler, errHandler)
 					if err != nil {
-						log.Println(err)
-						return
+						logger.Error(ctx, "an error occurred", zap.Error(err))
+						<-time.After(3 * time.Second)
+						continue
 					}
 
 					<-doneC

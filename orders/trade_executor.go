@@ -19,7 +19,7 @@ var TradeList = []trade.PairConfig{
 	{
 		Pair:           "BNBEUR",
 		Period:         "1m",
-		Strategy:       trade.MyOldCustomTransform,
+		Strategy:       trade.ScalpingTrendTransformForBuy,
 		OverrideParams: true,
 		LotSize:        1.3,
 		RatioToOne:     3,
@@ -28,7 +28,7 @@ var TradeList = []trade.PairConfig{
 	{
 		Pair:           "ETHEUR",
 		Period:         "1m",
-		Strategy:       trade.MyOldCustomTransform,
+		Strategy:       trade.ScalpingTrendTransformForBuy,
 		OverrideParams: true,
 		LotSize:        16,
 		RatioToOne:     3,
@@ -37,7 +37,7 @@ var TradeList = []trade.PairConfig{
 	{
 		Pair:           "TRXEUR",
 		Period:         "1m",
-		Strategy:       trade.MyOldCustomTransform,
+		Strategy:       trade.ScalpingTrendTransformForBuy,
 		OverrideParams: true,
 		LotSize:        0.00022,
 		RatioToOne:     3,
@@ -46,16 +46,16 @@ var TradeList = []trade.PairConfig{
 	{
 		Pair:           "DOGEEUR",
 		Period:         "1m",
-		Strategy:       trade.MyOldCustomTransform,
+		Strategy:       trade.ScalpingTrendTransformForBuy,
 		OverrideParams: true,
 		LotSize:        0.0005,
 		RatioToOne:     3,
 		TradeSize:      "318",
 	},
 	{
-		Pair:           "XRPUSDT",
-		Period:         "1h",
-		Strategy:       trade.MyOldCustomTransform,
+		Pair:           "XRPEUR",
+		Period:         "1m",
+		Strategy:       trade.ScalpingTrendTransformForBuy,
 		OverrideParams: true,
 		LotSize:        0.0020,
 		RatioToOne:     3,
@@ -114,6 +114,7 @@ func Sell(params *expert.SellParams) bool {
 		zap.Int64("OrderID", params.OrderID),
 		zap.Float64("PL", params.PL),
 	)
+
 	switch params.Pair {
 	case "":
 		// TODO: ADD our checks
