@@ -330,7 +330,7 @@ func findHighest(candles []expert.Candle) (float64, error) {
 			highest = c
 		}
 	}
-	§
+
 	return highest.Close, nil
 }
 
