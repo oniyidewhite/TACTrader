@@ -1,9 +1,11 @@
 package expert
 
 import (
+	"context"
+	"time"
+
 	"github.com/oblessing/artisgo/bot/store"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"time"
 )
 
 type mapper struct{}
@@ -13,8 +15,8 @@ type storage struct {
 	mapper *mapper
 }
 
-func (m *storage) FetchCandles(pair Pair, size int) ([]*Candle, error) {
-	response, err := m.store.Fetch(string(pair), size)
+func (m *storage) FetchCandles(ctx context.Context, pair Pair, size int) ([]*Candle, error) {
+	response, err := m.store.Fetch(ctx, string(pair), size)
 	if err != nil {
 		return []*Candle{}, err
 	}
@@ -27,9 +29,9 @@ func (m *storage) FetchCandles(pair Pair, size int) ([]*Candle, error) {
 	return result, nil
 }
 
-func (m *storage) Persist(candle *Candle) error {
+func (m *storage) Persist(ctx context.Context, candle *Candle) error {
 	data := m.mapper.convertTo(candle)
-	return m.store.Save(data)
+	return m.store.Save(ctx, data)
 }
 
 func (m *mapper) convertFrom(candle *store.BotData) *Candle {

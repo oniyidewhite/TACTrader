@@ -3,10 +3,13 @@ package bot
 import (
 	"context"
 	"errors"
+	"sync"
+	"time"
+
+	"go.uber.org/zap"
+
 	"github.com/oblessing/artisgo/expert"
 	"github.com/oblessing/artisgo/logger"
-	"go.uber.org/zap"
-	"time"
 )
 
 const (
@@ -31,9 +34,10 @@ type Candle struct {
 }
 
 type TradeInfo struct {
-	LowPoint   float64
-	HighPoint  float64
-	ReadyToBuy bool
+	LowPoint     float64
+	HighPoint    float64
+	ReadyToBuy   bool
+	ReadyToShort bool
 }
 
 type Args struct {
@@ -50,6 +54,7 @@ type PairConfig struct {
 	Period     string
 	TradeSize  string // To buy or short.
 	Strategy   expert.Transform
+	// Represent the percentage change
 	LotSize    float64
 	RatioToOne float64
 	Spread     float64
@@ -97,87 +102,89 @@ var VMA = func(candles []*expert.Candle) float64 {
 	return sum / float64(len(candles))
 }
 
-var VRSI = func(candles []*expert.Candle) float64 {
-	var sumUp float64 = 0
-	var sumDown float64 = 0
-	for _, i := range candles {
-		if i.IsUp() {
-			sumUp += i.Volume
-		} else {
-			sumDown += i.Volume
-		}
-	}
-	rsi := 100 - (100 / (1 - (sumUp / sumDown)))
-	return rsi
-}
-
 func GetDefaultAnalysis() []*expert.CalculateAction {
 	return []*expert.CalculateAction{
 		{
-			Name:   "MA36",
-			Size:   36,
+			Name:   "MA",
 			Action: MA,
 		},
 		{
-			Name:   "RSI6",
-			Size:   6,
+			Name:   "RSI",
 			Action: RSI,
 		},
 		{
-			Name:   "RSI14",
-			Size:   14,
-			Action: RSI,
-		},
-		{
-			Name:   "VMA18",
-			Size:   18,
+			Name:   "VMA13",
 			Action: VMA,
-		},
-		{
-			Name:   "VRSI18",
-			Size:   18,
-			Action: VRSI,
 		},
 	}
 }
 
-var tradeInfo = map[expert.Pair]TradeInfo{}
+var tradeInfo = sync.Map{} // map[expert.Pair]TradeInfo{}
 
-// ScalpingTrendTransformForBuy marks top and bottom of candle then use that information start
-func ScalpingTrendTransformForBuy(ctx context.Context, candles []*expert.Candle) *expert.TradeParams {
+// ScalpingTrendTransformForTrade marks top and bottom of candle then use that information start,// Review this logic, something is still broken
+func ScalpingTrendTransformForTrade(ctx context.Context, trigger expert.Candle, candles []*expert.Candle) *expert.TradeParams {
 	// find first candle
 	candle, err := findFirstNonNil(candles)
 	if err != nil {
 		logger.Error(ctx, "findFirstNonNil failed", zap.Error(err))
 		return nil
 	}
-	// if not candle.closed
-	if !candle.Closed {
-		rr := getTradeInfo(candle.Pair)
-		if isNotTradeable(rr) {
-			return nil
-		}
-
-		// check if ready to buy (use spread)
-		if withinSpread(ctx, rr, candle) && rr.ReadyToBuy {
-			// buy
-			rr.ReadyToBuy = false
-			tradeInfo[candle.Pair] = rr
-			return &expert.TradeParams{
-				OpenTradeAt: rr.HighPoint,
-				Rating:      30, // Good to buy
-				Pair:        candle.Pair,
-			}
-		}
-
-		return nil
-	}
-
-	// Check market trend
+	// TODO: Check overall trend, do not go against this.
+	// Check current market trend
 	trend, data, err := evaluateMarketTrend(candles)
 	if err != nil {
 		logger.Error(ctx, "unable to evaluate market trend", zap.Error(err))
 		return nil
+	}
+
+	// check if we can buy
+	rr := getTradeInfo(candle.Pair)
+	if !isNotTradeable(rr) {
+		//logger.Info(ctx, "is trade-able",
+		//	zap.Any("xx", rr),
+		//	zap.Int("trend", trend),
+		//	zap.Any("##", candle),
+		//	zap.Any("trigger", trigger))
+		// check if ready to long (use spread)
+		// Check if it passes the existing peak in 2 candles and we are good to buy.
+		// TODO: We should check if the previous candle is not greater. false flag if it is.
+		if rr.ReadyToBuy &&
+			trend == Green &&
+			withinHSpread(ctx, rr, candle) &&
+			data[1].Close <= rr.HighPoint {
+			// Reset data
+			rr.ReadyToBuy = false
+			rr.ReadyToShort = false
+			rr.LowPoint = MIN
+			rr.HighPoint = MIN
+			write(candle.Pair, rr)
+
+			// long
+			return &expert.TradeParams{
+				TradeType:   expert.TradeTypeLong,
+				OpenTradeAt: trigger.Close,
+				Pair:        candle.Pair,
+			}
+		}
+		// check if ready to short (use spread)
+		if rr.ReadyToShort &&
+			trend == Red &&
+			withinLSpread(ctx, rr, candle) &&
+			data[1].Close >= rr.LowPoint {
+			// Reset data
+			rr.ReadyToBuy = false
+			rr.ReadyToShort = false
+			rr.LowPoint = MIN
+			rr.HighPoint = MIN
+			write(candle.Pair, rr)
+
+			// long
+			return &expert.TradeParams{
+				TradeType:   expert.TradeTypeShort,
+				OpenTradeAt: trigger.Close,
+				Pair:        candle.Pair,
+			}
+		}
 	}
 
 	// Updated data based on trend & mark ready to buy based on trend.
@@ -195,7 +202,8 @@ func ScalpingTrendTransformForBuy(ctx context.Context, candles []*expert.Candle)
 		rr.HighPoint = res
 		// Since this a new high update ready to buy
 		rr.ReadyToBuy = false
-		tradeInfo[candle.Pair] = rr
+		rr.ReadyToShort = true
+		write(candle.Pair, rr)
 	case Red:
 		res, err := findLowest(data)
 		if err != nil {
@@ -209,7 +217,8 @@ func ScalpingTrendTransformForBuy(ctx context.Context, candles []*expert.Candle)
 		rr.LowPoint = res
 		// Since this a new high update ready to buy
 		rr.ReadyToBuy = true
-		tradeInfo[candle.Pair] = rr
+		rr.ReadyToShort = false
+		write(candle.Pair, rr)
 	default:
 		return nil
 	}
@@ -217,10 +226,12 @@ func ScalpingTrendTransformForBuy(ctx context.Context, candles []*expert.Candle)
 	return nil
 }
 
-func withinSpread(ctx context.Context, r TradeInfo, c expert.Candle) bool {
-	bound := ctx.Value("spread").(float64)
+func withinHSpread(ctx context.Context, r TradeInfo, c expert.Candle) bool {
+	return c.Close >= r.HighPoint
+}
 
-	return c.Close >= r.HighPoint && c.Close <= (r.HighPoint+bound)
+func withinLSpread(ctx context.Context, r TradeInfo, c expert.Candle) bool {
+	return c.Close <= r.LowPoint
 }
 
 func isNotTradeable(info TradeInfo) bool {
@@ -228,7 +239,7 @@ func isNotTradeable(info TradeInfo) bool {
 }
 
 func getTradeInfo(pair expert.Pair) TradeInfo {
-	rr, ok := tradeInfo[pair]
+	rr, ok := read(pair)
 	if !ok {
 		rr = TradeInfo{
 			LowPoint:  MIN,
@@ -237,6 +248,19 @@ func getTradeInfo(pair expert.Pair) TradeInfo {
 	}
 
 	return rr
+}
+
+func read(key expert.Pair) (TradeInfo, bool) {
+	result, ok := tradeInfo.Load(key)
+	if !ok {
+		return TradeInfo{}, false
+	}
+
+	return result.(TradeInfo), ok
+}
+
+func write(key expert.Pair, data TradeInfo) {
+	tradeInfo.Store(key, data)
 }
 
 func evaluateMarketTrend(candles []*expert.Candle) (int, []expert.Candle, error) {
@@ -277,36 +301,37 @@ func isRed(candle expert.Candle) bool {
 
 // Assumes we have only reds
 func findLowest(candles []expert.Candle) (float64, error) {
-	var lowest *expert.Candle
+	if len(candles) < 2 {
+		return 0, errors.New("no data to evaluate")
+	}
 
-	for _, c := range candles {
-		if lowest == nil || lowest.Close > c.Close {
-			lowest = &c
+	var lowest = candles[0]
+	for i := 0; i < 2; i++ {
+		c := candles[i]
+		if c.Close < lowest.Close {
+			lowest = c
 		}
 	}
 
-	if lowest != nil {
-		return lowest.Close, nil
-	}
-
-	return 0, errors.New("no data to evaluate")
+	return lowest.Close, nil
 }
 
 // Assumes we have only greens
 func findHighest(candles []expert.Candle) (float64, error) {
-	var highest *expert.Candle
+	if len(candles) < 2 {
+		return 0, errors.New("no data to evaluate")
+	}
 
-	for _, c := range candles {
-		if highest == nil || highest.Close < c.Close {
-			highest = &c
+	var highest = candles[0]
+
+	for i := 0; i < 2; i++ {
+		c := candles[i]
+		if c.Close > highest.Close {
+			highest = c
 		}
 	}
-
-	if highest != nil {
-		return highest.Close, nil
-	}
-
-	return 0, errors.New("no data to evaluate")
+	§
+	return highest.Close, nil
 }
 
 func findFirstNonNil(candles []*expert.Candle) (expert.Candle, error) {

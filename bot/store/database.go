@@ -1,8 +1,10 @@
 package store
 
 import (
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"context"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type BotData struct {
@@ -24,7 +26,7 @@ type Candle struct {
 
 type Database interface {
 	// Save date to database
-	Save(*BotData) error
+	Save(context.Context, *BotData) error
 	// Fetch retrieves record from database
-	Fetch(string, int) ([]*BotData, error)
+	Fetch(context.Context, string, int) ([]*BotData, error)
 }

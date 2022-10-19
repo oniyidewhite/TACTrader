@@ -3,9 +3,10 @@ package common
 import (
 	"context"
 	"errors"
+	"time"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"time"
 )
 
 const name = "mongo"
@@ -23,7 +24,7 @@ func NewDriver(uri string) (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(10)*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri).SetMinPoolSize(400).SetMaxPoolSize(0))
 	if err != nil {
 		return nil, err
 	}

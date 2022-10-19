@@ -3,16 +3,18 @@ package platform
 import (
 	"context"
 	"errors"
-	"github.com/adshao/go-binance/v2"
-	"github.com/oblessing/artisgo/bot"
-	"github.com/oblessing/artisgo/expert"
-	"github.com/oblessing/artisgo/logger"
-	"go.uber.org/zap"
 	log2 "log"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/adshao/go-binance/v2"
+	"go.uber.org/zap"
+
+	"github.com/oblessing/artisgo/bot"
+	"github.com/oblessing/artisgo/expert"
+	"github.com/oblessing/artisgo/logger"
 )
 
 const (
@@ -47,6 +49,11 @@ func (r *myBinance) StartTrading() error {
 	if r.hasStarted {
 		return errors.New("bot has already started")
 	}
+	ctx := context.Background()
+	logger.Info(ctx, "service is starting up")
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(r.pairs))
 
 	r.state.Do(func() {
 		r.hasStarted = true
@@ -55,15 +62,15 @@ func (r *myBinance) StartTrading() error {
 			log.Println(err)
 		}
 
-		ctx := context.Background()
-
 		// Start all the current pairs
 		for _, p := range r.pairs {
 			p := p
 			go func() {
 				wsKlineHandler := func(event *binance.WsKlineEvent) {
 					// pass result to expert Trader
-					r.expert.Record(convert(event), p.Strategy, expert.RecordConfig{
+					ctx := context.Background()
+
+					r.expert.Record(ctx, convert(event), p.Strategy, expert.RecordConfig{
 						LotSize:        p.LotSize,
 						RatioToOne:     p.RatioToOne,
 						OverrideParams: p.OverrideParams,
@@ -73,15 +80,19 @@ func (r *myBinance) StartTrading() error {
 				}
 
 				// We restart if we encounter an error.
+				var hasStarted = false
 				for {
 					logger.Info(ctx, "starting watcher", zap.String("pair", p.Pair), zap.String("period", p.Period))
 					doneC, _, err := binance.WsKlineServe(p.Pair, p.Period, wsKlineHandler, errHandler)
 					if err != nil {
 						logger.Error(ctx, "an error occurred", zap.Error(err))
-						<-time.After(3 * time.Second)
+						<-time.After(30 * time.Second)
 						continue
 					}
-
+					if !hasStarted {
+						wg.Done()
+						hasStarted = true
+					}
 					<-doneC
 				}
 			}()
@@ -89,6 +100,8 @@ func (r *myBinance) StartTrading() error {
 	})
 
 	// Lock
+	wg.Wait()
+	logger.Info(ctx, "service is running")
 	<-make(chan struct{})
 	return nil
 }

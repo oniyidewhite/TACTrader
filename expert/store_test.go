@@ -1,31 +1,13 @@
 package expert
 
 import (
-	"github.com/oblessing/artisgo/bot/store"
+	"errors"
+	"fmt"
 	"testing"
+
+	"github.com/oblessing/artisgo/bot/store"
+	"sync"
 )
-
-type tmpStorage struct {
-	store map[string][]*store.BotData
-}
-
-func (m *tmpStorage) Fetch(pair string, size int) ([]*store.BotData, error) {
-	c := m.store[pair]
-	start := len(c) - size
-	if start < 0 {
-		return nil, invalidSizeError
-	}
-	return c[start:], nil
-}
-
-func (m *tmpStorage) Save(candle *store.BotData) error {
-	m.store[candle.Pair] = append(m.store[candle.Pair], candle)
-	return nil
-}
-
-func (m *tmpStorage) cleanup() {
-	m.store = map[string][]*store.BotData{}
-}
 
 func TestExpertMapping(t *testing.T) {
 	tmpStorage := &tmpStorage{}

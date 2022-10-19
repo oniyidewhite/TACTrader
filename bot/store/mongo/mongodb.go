@@ -2,13 +2,14 @@ package mongo
 
 import (
 	"context"
+	"log"
+	"os"
+
 	"github.com/globalsign/mgo/bson"
 	"github.com/oblessing/artisgo/bot/store"
 	"github.com/oblessing/artisgo/common"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
-	"os"
 )
 
 const (
@@ -28,16 +29,18 @@ type Config struct {
 }
 
 // save data
-func (m MongoDBService) Save(data *store.BotData) error {
-	_, err := m.collection.InsertOne(context.Background(), data)
+func (m *MongoDBService) Save(ctx context.Context, data *store.BotData) error {
+	_, err := m.collection.InsertOne(ctx, data)
 	return err
 }
 
 // fetch a specific no of data
-func (m MongoDBService) Fetch(pair string, size int) ([]*store.BotData, error) {
-	ctx := context.Background()
+func (m *MongoDBService) Fetch(ctx context.Context, pair string, size int) ([]*store.BotData, error) {
 	var data []*store.BotData
 	r, err := m.collection.Find(ctx, bson.M{"pair": pair}, options.Find().SetSort(bson.M{"date": -1}).SetLimit(int64(size)))
+	if err != nil {
+		return data, err
+	}
 
 	err = r.All(ctx, &data)
 	return data, err
@@ -65,6 +68,6 @@ func NewMongoInstanceWithLogger(logger *log.Logger, config *Config) (store.Datab
 	if err != nil {
 		return nil, err
 	}
-	var mongodb interface{} = MongoDBService{service, logger}
-	return mongodb.(store.Database), nil
+
+	return &MongoDBService{service, logger}, nil
 }
