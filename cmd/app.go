@@ -47,9 +47,10 @@ func main() {
 
 	// Create order placing adapter.
 	orderAdapter := orders.NewAdapter(config)
-
 	// Set futures configuration on trading platform
-	orderAdapter.UpdateConfiguration(ctx, supportedPairs...)
+	if err := orderAdapter.UpdateConfiguration(ctx, supportedPairs...); err != nil {
+		panic(err)
+	}
 
 	// Create storage, we currently use memory store
 	memoryAdapter := memory.NewMemoryStore()
