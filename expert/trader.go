@@ -2,28 +2,20 @@ package expert
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
-	"os"
 	"sync"
 	"time"
 
-	TACTrader "github.com/oblessing/artisgo"
-)
+	"go.uber.org/zap"
 
-// const
-const (
-	thresholdMin = 23
-	thresholdMax = 40
-
-	logPrefix = "ea:\t"
+	settings "github.com/oblessing/artisgo"
+	"github.com/oblessing/artisgo/logger"
+	"github.com/oblessing/artisgo/store"
 )
 
 var (
 	// TODO: Add support for placing multiple trades
-	activeTrades     = sync.Map{} // map[Pair]*TradeParams{}
-	invalidSizeError = errors.New("invalid size argument")
+	activeTrades = sync.Map{} // map[Pair]*TradeParams{}
 	//invalidSizeActionError = errors.New("invalid size for action argument")
 )
 
@@ -55,7 +47,7 @@ const (
 type TradeParams struct {
 	TradeType    TradeType `json:"trade_type"`
 	OpenTradeAt  float64   `json:"open_trade_at"`
-	OrderID      int64     `json:"order_id"`
+	OrderID      string    `json:"order_id"`
 	TakeProfitAt float64   `json:"take_profit_at"`
 	StopLossAt   float64   `json:"stop_loss_at"`
 	TradeSize    string    `json:"trade_size"`
@@ -64,35 +56,33 @@ type TradeParams struct {
 	CreatedAt    time.Time `json:"time"`
 }
 
+type TradeData struct {
+	OrderID       string
+	ClientOrderID string
+}
+
 type SellParams struct {
 	IsStopLoss  bool
 	SellTradeAt float64
 	PL          float64
-	OrderID     int64
+	OrderID     string
 	TradeSize   string
 	Pair        Pair
 	TradeType   TradeType `json:"trade_type"`
 }
 
-type Config struct {
-	Size            int
-	BuyAction       PlaceTradeAction
-	SellAction      SellAction
-	Storage         DataSource
-	DefaultAnalysis []*CalculateAction
-}
-
-// interface to save and retrieve candles
 type DataSource interface {
 	FetchCandles(ctx context.Context, pair Pair, size int) ([]*Candle, error)
 	Persist(ctx context.Context, candle *Candle) error
 }
 
+type OrderService interface {
+	PlaceTrade(ctx context.Context, params TradeParams) (TradeData, error)
+	CloseTrade(ctx context.Context, params SellParams) (bool, error)
+}
+
 // Transform for analyze the data set, returns a %value, if the trade is worth taking
 type Transform func(ctx context.Context, trigger Candle, candles []*Candle) *TradeParams
-
-type PlaceTradeAction func(*TradeParams) bool
-type SellAction func(*SellParams) bool
 
 type Pair string
 
@@ -103,29 +93,21 @@ type CalculateAction struct {
 }
 
 type system struct {
-	size            int
-	datasource      DataSource
-	openTradeAction PlaceTradeAction
-	sellAction      SellAction
-	log             *log.Logger
-	calculateAction []*CalculateAction
+	settings     settings.Config
+	datasource   DataSource
+	orderService OrderService
 }
 
 type RecordConfig struct {
-	Spread float64
 	// Represents the percentage change
-	LotSize    float64
-	RatioToOne float64
-	// Override expert stop & take profit with config info
-	OverrideParams bool
-	// Represents the trade size
-	TradeSize string
+	LotSize         float64
+	RatioToOne      float64
+	CandleSize      int
+	DefaultAnalysis []*CalculateAction
 }
 
 type Trader interface {
 	Record(ctx context.Context, candle *Candle, transform Transform, config RecordConfig)
-	TradeClosed(ctx context.Context, pair Pair)
-	OnError(context.Context, error)
 }
 
 // IsUp
@@ -145,7 +127,7 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 	}
 
 	// Convert card to heikin ashi.
-	candles, _ := s.datasource.FetchCandles(ctx, c.Pair, s.size)
+	candles, _ := s.datasource.FetchCandles(ctx, c.Pair, config.CandleSize)
 	var previousCandle = c
 	if len(candles) != 0 {
 		previousCandle = candles[0]
@@ -153,8 +135,8 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 	candle := convertToHeikinAshi(previousCandle, c)
 
 	// apply actions; MA, RSI, etc
-	for _, action := range s.calculateAction {
-		if len(candles) != s.size {
+	for _, action := range config.DefaultAnalysis {
+		if len(candles) != config.CandleSize {
 			break
 		}
 
@@ -163,7 +145,7 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 
 	// persist the new candle
 	if err := s.datasource.Persist(ctx, candle); err != nil {
-		s.log.Printf("Error saving record :%+v", err)
+		logger.Error(ctx, "error persisting record", zap.Error(err))
 		return
 	}
 
@@ -173,9 +155,9 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 		return
 	}
 
-	dataset, err := s.datasource.FetchCandles(ctx, candle.Pair, s.size)
+	dataset, err := s.datasource.FetchCandles(ctx, candle.Pair, config.CandleSize)
 	if err != nil {
-		s.log.Printf("Error fetching record :%+v", err)
+		logger.Error(ctx, "error fetching records", zap.Error(err))
 		return
 	}
 
@@ -187,16 +169,14 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 }
 
 func (s *system) processTrade(ctx context.Context, c Candle, transform Transform, config RecordConfig, dataset []*Candle) {
-	ctx = context.WithValue(ctx, "spread", config.Spread)
 	result := transform(ctx, c, dataset)
 	// Check if we can act on the data
 	if result == nil {
 		return
 	}
-	result.TradeSize = config.TradeSize
 
 	var lotSize = config.LotSize * result.OpenTradeAt
-	var tradeSize = (1 / result.OpenTradeAt) * TACTrader.TradeAmount
+	var tradeSize = (1 / result.OpenTradeAt) * s.settings.TradeAmount
 	switch result.TradeType {
 	case TradeTypeLong:
 		stopLoss := result.OpenTradeAt - lotSize
@@ -212,7 +192,15 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TradeSize = fmt.Sprintf("%f", tradeSize)
 	}
 
-	if s.openTradeAction(result) {
+	if result != nil {
+		trd, err := s.orderService.PlaceTrade(ctx, *result)
+		if err != nil {
+			logger.Error(ctx, "ea_trader: unable to place trade", zap.Error(err))
+			return
+		}
+
+		result.OrderID = trd.OrderID
+
 		write(result.Pair, result)
 	}
 }
@@ -266,12 +254,8 @@ func highest(arr []float64) float64 {
 	return value
 }
 
-func (s *system) TradeClosed(ctx context.Context, pair Pair) {
+func (s *system) tradeClosed(ctx context.Context, pair Pair) {
 	remove(pair)
-}
-
-func (s *system) OnError(ctx context.Context, err error) {
-	s.log.Printf("An error occurred: %+v\n", err)
 }
 
 func (s *system) tryClosing(ctx context.Context, candle *Candle) {
@@ -281,11 +265,14 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 		return
 	}
 
+	var err error
+	var closedTrade bool
+
 	// try closing based on trade type.
 	switch params.TradeType {
 	case TradeTypeLong:
 		if candle.Close >= params.TakeProfitAt {
-			if s.sellAction(&SellParams{
+			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  false,
 				SellTradeAt: candle.Close,
 				PL:          candle.Close - params.OpenTradeAt,
@@ -293,11 +280,9 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,
 				TradeType:   params.TradeType,
-			}) {
-				s.TradeClosed(ctx, candle.Pair)
-			}
+			})
 		} else if candle.Close <= params.StopLossAt {
-			if s.sellAction(&SellParams{
+			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  true,
 				SellTradeAt: candle.Close,
 				PL:          candle.Close - params.OpenTradeAt,
@@ -305,13 +290,11 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,
 				TradeType:   params.TradeType,
-			}) {
-				s.TradeClosed(ctx, candle.Pair)
-			}
+			})
 		}
 	case TradeTypeShort:
 		if candle.Close <= params.TakeProfitAt {
-			if s.sellAction(&SellParams{
+			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  false,
 				SellTradeAt: candle.Close,
 				PL:          params.OpenTradeAt - candle.Close,
@@ -319,11 +302,9 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,
 				TradeType:   params.TradeType,
-			}) {
-				s.TradeClosed(ctx, candle.Pair)
-			}
+			})
 		} else if candle.Close >= params.StopLossAt {
-			if s.sellAction(&SellParams{
+			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  true,
 				SellTradeAt: candle.Close,
 				PL:          params.OpenTradeAt - candle.Close,
@@ -331,10 +312,17 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,
 				TradeType:   params.TradeType,
-			}) {
-				s.TradeClosed(ctx, candle.Pair)
-			}
+			})
 		}
+	}
+
+	if err != nil {
+		logger.Error(ctx, "ea_trader: error occurred while attempting to close trade", zap.Error(err))
+		return
+	}
+
+	if closedTrade {
+		s.tradeClosed(ctx, candle.Pair)
 	}
 }
 
@@ -355,18 +343,10 @@ func write(key Pair, data *TradeParams) {
 	activeTrades.Store(key, data)
 }
 
-// NewTrader returns a new Trader with logger enabled
-func NewTrader(config *Config) Trader {
-	return NewTraderWithLogger(config, log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile))
-}
-
-func NewTraderWithLogger(config *Config, logger *log.Logger) Trader {
+func NewExpertTrader(config settings.Config, storage store.Database, service OrderService) *system {
 	return &system{
-		size:            config.Size,
-		datasource:      config.Storage,
-		openTradeAction: config.BuyAction,
-		sellAction:      config.SellAction,
-		log:             logger,
-		calculateAction: config.DefaultAnalysis,
+		settings:     config,
+		datasource:   NewDataSource(storage),
+		orderService: service,
 	}
 }

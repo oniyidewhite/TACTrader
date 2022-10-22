@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/oblessing/artisgo/bot/store"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/oblessing/artisgo/store"
 )
 
 type mapper struct{}

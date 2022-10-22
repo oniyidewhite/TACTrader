@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oblessing/artisgo/bot/store"
+	"github.com/oblessing/artisgo/store"
 )
 
 type tmpStorageData struct {
@@ -14,7 +14,7 @@ type tmpStorageData struct {
 }
 
 type tmpStorage struct {
-	lock sync.RWMutex
+	lock  sync.RWMutex
 	store map[string]tmpStorageData
 }
 

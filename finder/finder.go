@@ -5,25 +5,35 @@ import (
 	"encoding/json"
 	"net/http"
 
-	TACTrader "github.com/oblessing/artisgo"
+	settings "github.com/oblessing/artisgo"
 	trade "github.com/oblessing/artisgo/bot"
 )
 
 const (
-	binanceAPI  = "https://api.binance.com/api/v3/exchangeInfo"
+	binanceAPI = "https://api.binance.com/api/v3/exchangeInfo"
 )
 
-type CryptoPair struct {
-	Symbol string `json:"symbol"`
-	IsMarginTradingAllowed bool `json:"isMarginTradingAllowed"`
+type finderAdapter struct {
+	config settings.Config
 }
 
-func lotSize() float64 {
-	return TACTrader.PercentageLotSize / 100
+type FinderService interface {
+	GetAllUsdtPairs(ctx context.Context) ([]trade.PairConfig, error)
+}
+
+type CryptoPair struct {
+	Symbol                 string `json:"symbol"`
+	IsMarginTradingAllowed bool   `json:"isMarginTradingAllowed"`
+}
+
+func NewFinderAdapter(config settings.Config) FinderService {
+	return finderAdapter{
+		config: config,
+	}
 }
 
 // GetAllUsdtPairs gets all the usdt pairs from binance.
-func GetAllUsdtPairs(ctx context.Context) ([]trade.PairConfig, error) {
+func (a finderAdapter) GetAllUsdtPairs(ctx context.Context) ([]trade.PairConfig, error) {
 	// make api call
 	request, err := http.NewRequestWithContext(ctx, "GET", binanceAPI, nil)
 	if err != nil {
@@ -37,7 +47,7 @@ func GetAllUsdtPairs(ctx context.Context) ([]trade.PairConfig, error) {
 
 	defer resp.Body.Close()
 
-	var allCryptos struct{
+	var allCryptos struct {
 		Symbols []CryptoPair `json:"symbols"`
 	}
 
@@ -47,10 +57,14 @@ func GetAllUsdtPairs(ctx context.Context) ([]trade.PairConfig, error) {
 	}
 
 	// pick only usdt pairs
-	return filterAndMap(allCryptos.Symbols), nil
+	return a.filterAndMap(allCryptos.Symbols), nil
 }
 
-func isUSDT(input string) bool {
+func (a finderAdapter) lotSize() float64 {
+	return a.config.PercentageLotSize / 100
+}
+
+func (a finderAdapter) isUSDT(input string) bool {
 	length := len(input) // USDT
 
 	var check = ""
@@ -61,19 +75,19 @@ func isUSDT(input string) bool {
 	return check == "USDT"
 }
 
-func filterAndMap(list []CryptoPair) []trade.PairConfig {
+func (a finderAdapter) filterAndMap(list []CryptoPair) []trade.PairConfig {
 	var result = []trade.PairConfig{}
 
 	for _, pair := range list {
-		if  isUSDT(pair.Symbol) && pair.IsMarginTradingAllowed  { // pair.Symbol == "BTCUSDT" || pair.Symbol == "ETHUSDT"
+		if a.isUSDT(pair.Symbol) && pair.IsMarginTradingAllowed {
 			result = append(result, trade.PairConfig{
-				Pair:           pair.Symbol,
-				Period:         TACTrader.Interval,
-				Strategy:       trade.ScalpingTrendTransformForTrade,
-				OverrideParams: true,
-				LotSize:        lotSize(), // 2%, calculate when we get a change of candle
-				RatioToOne:     3,
-				TradeSize:      "",//fmt.Sprintf("%f", (1/pair.Price())*tradeAmount), // calculate when we are about to make trade
+				Pair:            pair.Symbol,
+				Period:          a.config.Interval,
+				Strategy:        trade.ScalpingTrendTransformForTrade,
+				LotSize:         a.lotSize(),
+				RatioToOne:      3,
+				CandleSize:      6,
+				DefaultAnalysis: trade.GetDefaultAnalysis(),
 			})
 		}
 	}

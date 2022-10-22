@@ -2,148 +2,149 @@ package orders
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/adshao/go-binance/v2"
+	"github.com/adshao/go-binance/v2/futures"
 	"go.uber.org/zap"
 
-	trade "github.com/oblessing/artisgo/bot"
+	settings "github.com/oblessing/artisgo"
 	"github.com/oblessing/artisgo/expert"
 	"github.com/oblessing/artisgo/logger"
 )
 
-var binanceApiKey = ""
-var binanceSecretKey = ""
-
-var client *binance.Client
-
-var TradeList = []trade.PairConfig{
-	{
-		Pair:           "BNBEUR",
-		Period:         "1m",
-		Strategy:       trade.ScalpingTrendTransformForTrade,
-		OverrideParams: true,
-		LotSize:        1.3,
-		RatioToOne:     3,
-		TradeSize:      "0.114",
-	},
-	{
-		Pair:           "ETHEUR",
-		Period:         "15m",
-		Strategy:       trade.ScalpingTrendTransformForTrade,
-		OverrideParams: true,
-		LotSize:        16,
-		RatioToOne:     3,
-		TradeSize:      "0.0166",
-	},
-	{
-		Pair:           "TRXEUR",
-		Period:         "1m",
-		Strategy:       trade.ScalpingTrendTransformForTrade,
-		OverrideParams: true,
-		LotSize:        0.00022,
-		RatioToOne:     3,
-		TradeSize:      "707",
-	},
-	{
-		Pair:           "DOGEEUR",
-		Period:         "1m",
-		Strategy:       trade.ScalpingTrendTransformForTrade,
-		OverrideParams: true,
-		LotSize:        0.0005,
-		RatioToOne:     3,
-		TradeSize:      "318",
-	},
-	{
-		Pair:           "XRPEUR",
-		Period:         "1m",
-		Strategy:       trade.ScalpingTrendTransformForTrade,
-		OverrideParams: true,
-		LotSize:        0.0020,
-		RatioToOne:     3,
-		TradeSize:      "58",
-	},
+type binanceAdapter struct {
+	client     *futures.Client
+	isTestMode bool
 }
 
-func init() {
-	client = binance.NewClient(binanceApiKey, binanceSecretKey)
+type OrderService interface {
+	PlaceTrade(ctx context.Context, params expert.TradeParams) (expert.TradeData, error)
+	CloseTrade(ctx context.Context, params expert.SellParams) (bool, error)
 }
 
-func PlaceTrade(params *expert.TradeParams) bool {
-	ctx := context.Background()
+func NewAdapter(config settings.Config) *binanceAdapter {
+	binance.UseTestnet = config.IsTestMode()
+	return &binanceAdapter{
+		client:     binance.NewFuturesClient(config.BinanceApiKey, config.BinanceSecretKey),
+		isTestMode: config.IsTestMode(),
+	}
+}
 
+func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
 	ctx = logger.With(ctx,
-		zap.Any("TradeType", params.TradeType),
-		zap.Float64("OpenTradeAt", params.OpenTradeAt),
-		zap.Float64("TakeProfitAt", params.TakeProfitAt),
-		zap.Float64("StopLossAt", params.StopLossAt),
-		zap.Any("TradeSize", params.TradeSize),
-		zap.Int("Rating", params.Rating))
-	logger.Info(ctx, fmt.Sprintf("place %s for: %s", params.TradeType, params.Pair))
+		zap.Any("tradeType", params.TradeType),
+		zap.Float64("openTradeAt", params.OpenTradeAt),
+		zap.Float64("takeProfitAt", params.TakeProfitAt),
+		zap.Float64("stopLossAt", params.StopLossAt),
+		zap.Any("tradeSize", params.TradeSize),
+		zap.Int("rating", params.Rating))
 
-	switch params.Pair {
-	case "":
-		// TODO: ADD our checks
-		res, err := client.NewCreateOrderService().
-			Symbol(string(params.Pair)).
-			Side(binance.SideTypeBuy).
-			Price(fmt.Sprintf("%v", params.OpenTradeAt)).
-			Quantity(params.TradeSize).
-			TimeInForce(binance.TimeInForceTypeGTC).
-			Type(binance.OrderTypeLimit).
-			Do(context.Background())
-		if err != nil {
-			logger.Error(ctx, "error placing order", zap.Error(err))
-			return false
-		}
-
-		params.OrderID = res.OrderID
-		ctx = logger.With(ctx, zap.Int64("order_id", params.OrderID))
-	default:
-		// logger.Info(ctx, "buyAction not supported: marked a buy order")
-		return true
+	if b.isTestMode {
+		return expert.TradeData{}, nil
 	}
 
-	return true
+	switch params.TradeType {
+	case expert.TradeTypeLong:
+		return b.placeLong(ctx, params)
+	case expert.TradeTypeShort:
+		return b.placeShort(ctx, params)
+	default:
+		return expert.TradeData{}, errors.New("unsupported trade tyep")
+	}
 }
-func Sell(params *expert.SellParams) bool {
-	ctx := context.Background()
 
+func (b *binanceAdapter) CloseTrade(ctx context.Context, params expert.SellParams) (bool, error) {
 	ctx = logger.With(ctx,
-		zap.Any("Pair", params.Pair),
-		zap.Any("TradeType", params.TradeType),
-		zap.Bool("IsStopLoss", params.IsStopLoss),
-		zap.Float64("SellTradeAt", params.SellTradeAt),
-		zap.Int64("OrderID", params.OrderID),
-		zap.Float64("PL", params.PL),
+		zap.Any("pair", params.Pair),
+		zap.Any("tradeType", params.TradeType),
+		zap.Bool("isStopLoss", params.IsStopLoss),
+		zap.Float64("sellTradeAt", params.SellTradeAt),
+		zap.String("orderID", params.OrderID),
+		zap.Float64("pl", params.PL),
 	)
 
-	switch params.Pair {
-	case "":
-		// TODO: ADD our checks
-		res, err := client.NewCreateOrderService().
-			Symbol(string(params.Pair)).
-			Side(binance.SideTypeSell).
-			Price(fmt.Sprintf("%v", params.SellTradeAt)).
-			Quantity(params.TradeSize).
-			TimeInForce(binance.TimeInForceTypeGTC).
-			Type(binance.OrderTypeLimit).
-			Do(context.Background())
-		if err != nil {
-			logger.Error(ctx, "error placing order", zap.Error(err))
-			return false
-		}
-		ctx = logger.With(ctx, zap.Int64("sell_order_id", res.OrderID))
-
-	default:
+	if b.isTestMode {
 		if params.IsStopLoss {
 			logger.Info(ctx, "stop loss")
-			return true
+			return true, nil
 		}
+
 		logger.Info(ctx, "take profit")
-		return true
+		return true, nil
 	}
 
-	logger.Info(ctx, "successfully placed sell order")
-	return true
+	orderID, err := strconv.ParseInt(params.OrderID, 10, 64)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = b.client.NewCancelOrderService().Symbol(string(params.Pair)).OrderID(orderID).Do(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// EnableIsolatedTrading tells binance that this pair should be traded in isolated mode.
+func (b *binanceAdapter) EnableIsolatedTrading(ctx context.Context, pair expert.Pair) error {
+	err := b.client.NewChangeMarginTypeService().MarginType(futures.MarginTypeIsolated).Symbol(string(pair)).Do(ctx)
+	return err
+}
+
+// SetLeverage tells binance to use a specific amount for this trade.
+func (b *binanceAdapter) SetLeverage(ctx context.Context, pair expert.Pair) error {
+	_, err := b.client.NewChangeLeverageService().Symbol(string(pair)).Leverage(10).Do(ctx)
+	return err
+}
+
+func (b *binanceAdapter) placeLong(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
+	res, err := b.client.NewCreateOrderService().
+		Symbol(string(params.Pair)).
+		PositionSide(futures.PositionSideTypeLong).
+		Price(fmt.Sprintf("%f", params.OpenTradeAt)).
+		StopPrice(fmt.Sprintf("%f", params.StopLossAt)).
+		Quantity(params.TradeSize).
+		Side(futures.SideTypeBuy).
+		Type(futures.OrderTypeStop). //OrderTypeStopMarket, ClosePosition(true).
+		TimeInForce(futures.TimeInForceTypeFOK).
+		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
+		Do(ctx)
+	if err != nil {
+		return expert.TradeData{}, err
+	}
+
+	logger.Info(ctx, "order: placed long", zap.Any("response", res))
+
+	return expert.TradeData{
+		OrderID:       fmt.Sprintf("%d", res.OrderID),
+		ClientOrderID: res.ClientOrderID,
+	}, err
+}
+
+func (b *binanceAdapter) placeShort(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
+	res, err := b.client.NewCreateOrderService().
+		Symbol(string(params.Pair)).
+		PositionSide(futures.PositionSideTypeShort).
+		Price(fmt.Sprintf("%f", params.OpenTradeAt)).
+		StopPrice(fmt.Sprintf("%f", params.StopLossAt)).
+		Quantity(params.TradeSize).
+		Side(futures.SideTypeSell).
+		Type(futures.OrderTypeStop). //OrderTypeStopMarket, ClosePosition(true).
+		TimeInForce(futures.TimeInForceTypeFOK).
+		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
+		Do(ctx)
+	if err != nil {
+		return expert.TradeData{}, err
+	}
+
+	logger.Info(ctx, "order: placed short", zap.Any("response", res))
+
+	return expert.TradeData{
+		OrderID:       fmt.Sprintf("%d", res.OrderID),
+		ClientOrderID: res.ClientOrderID,
+	}, err
 }

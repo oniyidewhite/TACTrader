@@ -50,17 +50,17 @@ type Args struct {
 
 // PairConfig represent a crypto pair configuration
 type PairConfig struct {
-	Pair       string
-	Period     string
-	TradeSize  string // To buy or short.
-	Strategy   expert.Transform
+	Pair     string
+	Period   string
+	Strategy expert.Transform
 	// Represent the percentage change
-	LotSize    float64
-	RatioToOne float64
-	Spread     float64
-	// Override expert stop & take profit with config info
-	OverrideParams  bool
+	LotSize         float64
+	RatioToOne      float64
 	DisableStopLoss bool
+	// DefaultAnalysis contains other this we should monitor for this symbol
+	DefaultAnalysis []*expert.CalculateAction
+	// CandleStick size
+	CandleSize int
 }
 
 type Trader interface {

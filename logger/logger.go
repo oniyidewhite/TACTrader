@@ -2,12 +2,15 @@ package logger
 
 import (
 	"context"
+
 	"go.uber.org/zap"
 )
 
 var logger *zap.Logger
 
-const loggerfields = "logger.fields"
+const loggerfields LogTag = "logger.fields"
+
+type LogTag string
 
 func init() {
 	var err error
@@ -23,7 +26,6 @@ func With(ctx context.Context, fields ...zap.Field) context.Context {
 	if data != nil {
 		storedFields = data.([]zap.Field)
 	}
-	storedFields = []zap.Field{}
 	storedFields = append(storedFields, fields...)
 	return context.WithValue(ctx, loggerfields, storedFields)
 }
