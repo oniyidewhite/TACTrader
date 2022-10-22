@@ -52,11 +52,8 @@ func main() {
 		panic(err)
 	}
 
-	// Create storage, we currently use memory store
-	memoryAdapter := memory.NewMemoryStore()
-
 	// Create expert trader
-	eaTrader := expert.NewExpertTrader(config, memoryAdapter, orderAdapter)
+	eaTrader := expert.NewExpertTrader(config, memory.NewMemoryStore(), orderAdapter)
 
 	lg.Info(ctx, "about to start monitor", zap.Int("count", len(supportedPairs)))
 
