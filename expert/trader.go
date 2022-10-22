@@ -13,37 +13,41 @@ import (
 	"github.com/oblessing/artisgo/store"
 )
 
-var (
-	// TODO: Add support for placing multiple trades
-	activeTrades = sync.Map{} // map[Pair]*TradeParams{}
-	//invalidSizeActionError = errors.New("invalid size for action argument")
-)
-
-// structs
-type Candle struct {
-	Pair Pair
-
-	High   float64
-	Low    float64
-	Open   float64
-	Close  float64
-	Volume float64
-
-	// Holds other information like RSI, MA or any other data the system needs
-	OtherData map[string]float64
-
-	Time   int64
-	Closed bool
-}
-
-type TradeType string
-
 const (
 	TradeTypeLong  TradeType = "long"
 	TradeTypeShort TradeType = "short"
 )
 
-// Struct for initiating a trade
+var (
+	// TODO: Add support for placing multiple trades for a specific symbol
+	activeTrades = sync.Map{} // map[Pair]*TradeParams{}
+)
+
+type TradeType string
+
+// Transform for analyze the data set, returns a %value, if the trade is worth taking
+type Transform func(ctx context.Context, trigger Candle, candles []*Candle) *TradeParams
+
+type Pair string
+
+type Candle struct {
+	Pair   Pair
+	High   float64
+	Low    float64
+	Open   float64
+	Close  float64
+	Volume float64
+	// Holds other information like RSI, MA or any other data the system needs
+	OtherData map[string]float64
+	Time      int64
+	Closed    bool
+}
+
+func (c *Candle) IsUp() bool {
+	return c.Close > c.Open
+}
+
+// TradeParams for initiating a trade
 type TradeParams struct {
 	TradeType    TradeType `json:"trade_type"`
 	OpenTradeAt  float64   `json:"open_trade_at"`
@@ -51,7 +55,7 @@ type TradeParams struct {
 	TakeProfitAt float64   `json:"take_profit_at"`
 	StopLossAt   float64   `json:"stop_loss_at"`
 	TradeSize    string    `json:"trade_size"`
-	Rating       int       `json:"rating"`
+	Rating       int       `json:"rating"` // Deprecated
 	Pair         Pair      `json:"pair"`
 	CreatedAt    time.Time `json:"time"`
 }
@@ -70,21 +74,6 @@ type SellParams struct {
 	Pair        Pair
 	TradeType   TradeType `json:"trade_type"`
 }
-
-type DataSource interface {
-	FetchCandles(ctx context.Context, pair Pair, size int) ([]*Candle, error)
-	Persist(ctx context.Context, candle *Candle) error
-}
-
-type OrderService interface {
-	PlaceTrade(ctx context.Context, params TradeParams) (TradeData, error)
-	CloseTrade(ctx context.Context, params SellParams) (bool, error)
-}
-
-// Transform for analyze the data set, returns a %value, if the trade is worth taking
-type Transform func(ctx context.Context, trigger Candle, candles []*Candle) *TradeParams
-
-type Pair string
 
 type CalculateAction struct {
 	Name   string
@@ -106,13 +95,26 @@ type RecordConfig struct {
 	DefaultAnalysis []*CalculateAction
 }
 
+type DataSource interface {
+	FetchCandles(ctx context.Context, pair Pair, size int) ([]*Candle, error)
+	Persist(ctx context.Context, candle *Candle) error
+}
+
+type OrderService interface {
+	PlaceTrade(ctx context.Context, params TradeParams) (TradeData, error)
+	CloseTrade(ctx context.Context, params SellParams) (bool, error)
+}
+
 type Trader interface {
 	Record(ctx context.Context, candle *Candle, transform Transform, config RecordConfig)
 }
 
-// IsUp
-func (c *Candle) IsUp() bool {
-	return c.Close > c.Open
+func NewExpertTrader(config settings.Config, storage store.Database, service OrderService) *system {
+	return &system{
+		settings:     config,
+		datasource:   NewDataSource(storage),
+		orderService: service,
+	}
 }
 
 func (s *system) Record(ctx context.Context, c *Candle, transform Transform, config RecordConfig) {
@@ -191,6 +193,8 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.StopLossAt = stopLoss
 		result.TradeSize = fmt.Sprintf("%f", tradeSize)
 	}
+	// set timestamp
+	result.CreatedAt = time.Now().UTC()
 
 	if result != nil {
 		trd, err := s.orderService.PlaceTrade(ctx, *result)
@@ -205,56 +209,7 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	}
 }
 
-func convertToHeikinAshi(older *Candle, newer *Candle) *Candle {
-	if newer == nil {
-		return nil
-	}
-	if older == nil {
-		older = newer
-	}
-
-	// close
-	newClose := 0.25 * (newer.Open + newer.Close + newer.High + newer.Low)
-	newOpen := 0.5 * (older.Open + older.Close)
-	newLow := lowest([]float64{newer.Low, newOpen, newClose})
-	newHigh := highest([]float64{newer.High, newOpen, newClose})
-
-	result := &Candle{
-		Pair:      newer.Pair,
-		High:      newHigh,
-		Low:       newLow,
-		Open:      newOpen,
-		Close:     newClose,
-		Volume:    newer.Volume,
-		OtherData: newer.OtherData,
-		Time:      newer.Time,
-		Closed:    newer.Closed,
-	}
-
-	return result
-}
-
-func lowest(arr []float64) float64 {
-	value := arr[0]
-	for _, v := range arr {
-		if v < value {
-			value = v
-		}
-	}
-	return value
-}
-
-func highest(arr []float64) float64 {
-	value := arr[0]
-	for _, v := range arr {
-		if v > value {
-			value = v
-		}
-	}
-	return value
-}
-
-func (s *system) tradeClosed(ctx context.Context, pair Pair) {
+func (s *system) tradeClosed(pair Pair) {
 	remove(pair)
 }
 
@@ -322,8 +277,57 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 	}
 
 	if closedTrade {
-		s.tradeClosed(ctx, candle.Pair)
+		s.tradeClosed(candle.Pair)
 	}
+}
+
+func convertToHeikinAshi(older *Candle, newer *Candle) *Candle {
+	if newer == nil {
+		return nil
+	}
+	if older == nil {
+		older = newer
+	}
+
+	// close
+	newClose := 0.25 * (newer.Open + newer.Close + newer.High + newer.Low)
+	newOpen := 0.5 * (older.Open + older.Close)
+	newLow := lowest([]float64{newer.Low, newOpen, newClose})
+	newHigh := highest([]float64{newer.High, newOpen, newClose})
+
+	result := &Candle{
+		Pair:      newer.Pair,
+		High:      newHigh,
+		Low:       newLow,
+		Open:      newOpen,
+		Close:     newClose,
+		Volume:    newer.Volume,
+		OtherData: newer.OtherData,
+		Time:      newer.Time,
+		Closed:    newer.Closed,
+	}
+
+	return result
+}
+
+func lowest(arr []float64) float64 {
+	value := arr[0]
+	for _, v := range arr {
+		if v < value {
+			value = v
+		}
+	}
+	return value
+}
+
+func highest(arr []float64) float64 {
+	value := arr[0]
+	for _, v := range arr {
+		if v > value {
+			value = v
+		}
+	}
+	return value
 }
 
 func read(key Pair) (*TradeParams, bool) {
@@ -341,12 +345,4 @@ func remove(key Pair) {
 
 func write(key Pair, data *TradeParams) {
 	activeTrades.Store(key, data)
-}
-
-func NewExpertTrader(config settings.Config, storage store.Database, service OrderService) *system {
-	return &system{
-		settings:     config,
-		datasource:   NewDataSource(storage),
-		orderService: service,
-	}
 }

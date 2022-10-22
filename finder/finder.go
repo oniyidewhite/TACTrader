@@ -17,8 +17,8 @@ type finderAdapter struct {
 	config settings.Config
 }
 
-type FinderService interface {
-	GetAllUsdtPairs(ctx context.Context) ([]trade.PairConfig, error)
+type Service interface {
+	GetSupportedAssets(ctx context.Context) ([]trade.PairConfig, error)
 }
 
 type CryptoPair struct {
@@ -26,14 +26,14 @@ type CryptoPair struct {
 	IsMarginTradingAllowed bool   `json:"isMarginTradingAllowed"`
 }
 
-func NewFinderAdapter(config settings.Config) FinderService {
+func NewFinderAdapter(config settings.Config) Service {
 	return finderAdapter{
 		config: config,
 	}
 }
 
-// GetAllUsdtPairs gets all the usdt pairs from binance.
-func (a finderAdapter) GetAllUsdtPairs(ctx context.Context) ([]trade.PairConfig, error) {
+// GetSupportedAssets gets all the usdt pairs from binance.
+func (a finderAdapter) GetSupportedAssets(ctx context.Context) ([]trade.PairConfig, error) {
 	// make api call
 	request, err := http.NewRequestWithContext(ctx, "GET", binanceAPI, nil)
 	if err != nil {

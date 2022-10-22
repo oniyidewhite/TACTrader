@@ -38,6 +38,11 @@ func NewAdapter(config settings.Config) *binanceAdapter {
 
 // UpdateConfiguration runs any needed configuration to the trade executor
 func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...bot.PairConfig) error {
+	// There's no need to update config in test mode.
+	if b.isTestMode {
+		return nil
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 	for _, pair := range pairs {
 		p := pair

@@ -40,16 +40,16 @@ func main() {
 	}
 
 	// get symbols to trade, retrieve cryptos to monitor
-	supportedPairs, err := finder.NewFinderAdapter(config).GetAllUsdtPairs(ctx)
+	supportedPairs, err := finder.NewFinderAdapter(config).GetSupportedAssets(ctx)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	// Create order placing adapter.
+	// Create orders adapter.
 	orderAdapter := orders.NewAdapter(config)
 	// Set futures configuration on trading platform
 	if err := orderAdapter.UpdateConfiguration(ctx, supportedPairs...); err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 
 	// Create expert trader
@@ -57,7 +57,7 @@ func main() {
 
 	lg.Info(ctx, "about to start monitor", zap.Int("count", len(supportedPairs)))
 
-	// start trader
+	// Connect to datasource for symbols + pass in eaTrader
 	if err = platform.NewSymbolDatasource(config, eaTrader).StartTrading(ctx, supportedPairs...); err != nil {
 		logger.Fatal(err)
 	}
