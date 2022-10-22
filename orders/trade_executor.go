@@ -59,14 +59,16 @@ func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...bot.P
 
 func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
 	ctx = logger.With(ctx,
-		zap.Any("tradeType", params.TradeType),
-		zap.Float64("openTradeAt", params.OpenTradeAt),
-		zap.Float64("takeProfitAt", params.TakeProfitAt),
-		zap.Float64("stopLossAt", params.StopLossAt),
-		zap.Any("tradeSize", params.TradeSize),
-		zap.Int("rating", params.Rating))
+		zap.Any("p", params.Pair),
+		zap.Any("ty", params.TradeType),
+		zap.Float64("ot", params.OpenTradeAt),
+		zap.Float64("tp", params.TakeProfitAt),
+		zap.Float64("sl", params.StopLossAt),
+		zap.Any("tz", params.TradeSize),
+		zap.Any("atr", params.Attribs))
 
 	if b.isTestMode {
+		logger.Info(ctx, "placed order")
 		return expert.TradeData{}, nil
 	}
 
@@ -82,11 +84,11 @@ func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradePara
 
 func (b *binanceAdapter) CloseTrade(ctx context.Context, params expert.SellParams) (bool, error) {
 	ctx = logger.With(ctx,
-		zap.Any("pair", params.Pair),
-		zap.Any("tradeType", params.TradeType),
-		zap.Bool("isStopLoss", params.IsStopLoss),
-		zap.Float64("sellTradeAt", params.SellTradeAt),
-		zap.String("orderID", params.OrderID),
+		zap.Any("p", params.Pair),
+		zap.Any("ty", params.TradeType),
+		zap.Bool("isl", params.IsStopLoss),
+		zap.Float64("sa", params.SellTradeAt),
+		zap.String("oid", params.OrderID),
 		zap.Float64("pl", params.PL),
 	)
 

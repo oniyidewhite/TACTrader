@@ -49,15 +49,16 @@ func (c *Candle) IsUp() bool {
 
 // TradeParams for initiating a trade
 type TradeParams struct {
-	TradeType    TradeType `json:"trade_type"`
-	OpenTradeAt  float64   `json:"open_trade_at"`
-	OrderID      string    `json:"order_id"`
-	TakeProfitAt float64   `json:"take_profit_at"`
-	StopLossAt   float64   `json:"stop_loss_at"`
-	TradeSize    string    `json:"trade_size"`
-	Rating       int       `json:"rating"` // Deprecated
-	Pair         Pair      `json:"pair"`
-	CreatedAt    time.Time `json:"time"`
+	TradeType    TradeType          `json:"trade_type"`
+	OpenTradeAt  float64            `json:"open_trade_at"`
+	OrderID      string             `json:"order_id"`
+	TakeProfitAt float64            `json:"take_profit_at"`
+	StopLossAt   float64            `json:"stop_loss_at"`
+	TradeSize    string             `json:"trade_size"`
+	Rating       int                `json:"rating"` // Deprecated
+	Pair         Pair               `json:"pair"`
+	CreatedAt    time.Time          `json:"time"`
+	Attribs      map[string]float64 `json:"others"`
 }
 
 type TradeData struct {
@@ -195,6 +196,8 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
+	// Set additional attribs for logging
+	result.Attribs = c.OtherData
 
 	if result != nil {
 		trd, err := s.orderService.PlaceTrade(ctx, *result)
