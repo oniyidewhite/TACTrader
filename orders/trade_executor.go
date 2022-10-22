@@ -9,8 +9,10 @@ import (
 	"github.com/adshao/go-binance/v2"
 	"github.com/adshao/go-binance/v2/futures"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	settings "github.com/oblessing/artisgo"
+	"github.com/oblessing/artisgo/bot"
 	"github.com/oblessing/artisgo/expert"
 	"github.com/oblessing/artisgo/logger"
 )
@@ -23,6 +25,7 @@ type binanceAdapter struct {
 type OrderService interface {
 	PlaceTrade(ctx context.Context, params expert.TradeParams) (expert.TradeData, error)
 	CloseTrade(ctx context.Context, params expert.SellParams) (bool, error)
+	UpdateConfiguration(ctx context.Context, pairs ...expert.Pair) error
 }
 
 func NewAdapter(config settings.Config) *binanceAdapter {
@@ -31,6 +34,22 @@ func NewAdapter(config settings.Config) *binanceAdapter {
 		client:     binance.NewFuturesClient(config.BinanceApiKey, config.BinanceSecretKey),
 		isTestMode: config.IsTestMode(),
 	}
+}
+
+// UpdateConfiguration runs any needed configuration to the trade executor
+func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...bot.PairConfig) error {
+	g, ctx := errgroup.WithContext(ctx)
+	for _, pair := range pairs {
+		p := pair
+		g.Go(func() error {
+			return b.setLeverage(ctx, expert.Pair(p.Pair))
+		})
+		g.Go(func() error {
+			return b.enableIsolatedTrading(ctx, expert.Pair(p.Pair))
+		})
+	}
+
+	return g.Wait()
 }
 
 func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
@@ -90,13 +109,13 @@ func (b *binanceAdapter) CloseTrade(ctx context.Context, params expert.SellParam
 }
 
 // EnableIsolatedTrading tells binance that this pair should be traded in isolated mode.
-func (b *binanceAdapter) EnableIsolatedTrading(ctx context.Context, pair expert.Pair) error {
+func (b *binanceAdapter) enableIsolatedTrading(ctx context.Context, pair expert.Pair) error {
 	err := b.client.NewChangeMarginTypeService().MarginType(futures.MarginTypeIsolated).Symbol(string(pair)).Do(ctx)
 	return err
 }
 
 // SetLeverage tells binance to use a specific amount for this trade.
-func (b *binanceAdapter) SetLeverage(ctx context.Context, pair expert.Pair) error {
+func (b *binanceAdapter) setLeverage(ctx context.Context, pair expert.Pair) error {
 	_, err := b.client.NewChangeLeverageService().Symbol(string(pair)).Leverage(10).Do(ctx)
 	return err
 }

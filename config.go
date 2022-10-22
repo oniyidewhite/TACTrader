@@ -25,9 +25,9 @@ func GetRuntimeConfig() (Config, error) {
 		return Config{
 			BinanceApiKey:     "",
 			BinanceSecretKey:  "",
-			Interval:          "3m",
-			PercentageLotSize: (22 / 7) / 3,
-			TradeAmount:       10,
+			Interval:          "15m",
+			PercentageLotSize: ((22 / 7) / 3) - 1,
+			TradeAmount:       2,
 			TestType:          "local",
 		}, nil
 	}
@@ -60,3 +60,6 @@ func GetRuntimeConfig() (Config, error) {
 
 // 3m // 0.13258
 // 3m 0.14285
+
+// ((22 / 7) / 3) - 1,
+// (22/7) - (( (1 + 2 + 3 + 5) / 8))
