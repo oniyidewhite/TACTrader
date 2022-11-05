@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 
 	settings "github.com/oblessing/artisgo"
+	"github.com/oblessing/artisgo/strategy"
 
-	"github.com/oblessing/artisgo/bot"
 	"github.com/oblessing/artisgo/expert"
 	"github.com/oblessing/artisgo/logger"
 )
@@ -23,10 +23,10 @@ type myBinance struct {
 }
 
 type TradingService interface {
-	StartTrading(ctx context.Context, pairs ...bot.PairConfig) error
+	StartTrading(ctx context.Context, pairs ...strategy.PairConfig) error
 }
 
-func (r *myBinance) StartTrading(ctx context.Context, pairs ...bot.PairConfig) error {
+func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConfig) error {
 	logger.Info(ctx, "service is starting up")
 
 	wg := sync.WaitGroup{}

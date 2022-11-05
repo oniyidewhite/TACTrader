@@ -12,9 +12,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	settings "github.com/oblessing/artisgo"
-	"github.com/oblessing/artisgo/bot"
 	"github.com/oblessing/artisgo/expert"
 	"github.com/oblessing/artisgo/logger"
+	"github.com/oblessing/artisgo/strategy"
 )
 
 type binanceAdapter struct {
@@ -37,7 +37,7 @@ func NewAdapter(config settings.Config) *binanceAdapter {
 }
 
 // UpdateConfiguration runs any needed configuration to the trade executor
-func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...bot.PairConfig) error {
+func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...strategy.PairConfig) error {
 	// There's no need to update config in test mode.
 	if b.isTestMode {
 		return nil
