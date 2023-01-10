@@ -24,6 +24,13 @@ type Service interface {
 type CryptoPair struct {
 	Symbol                 string `json:"symbol"`
 	IsMarginTradingAllowed bool   `json:"isMarginTradingAllowed"`
+	QuotePrecision         int    `json:"quotePrecision"`
+	Filters                []struct {
+		FilterType string `json:"filterType"`
+		MinPrice   string `json:"minPrice"`
+		MaxPrice   string `json:"maxPrice"`
+		TickSize   string `json:"tickSize"`
+	} `json:"filters"`
 }
 
 func NewFinderAdapter(config settings.Config) Service {
@@ -84,6 +91,7 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	for _, pair := range list {
 		if a.isUSDT(pair.Symbol) && pair.IsMarginTradingAllowed {
 			result = append(result, strategy.PairConfig{
+				QuotePrecision:  pair.QuotePrecision,
 				Pair:            pair.Symbol,
 				Period:          a.config.Interval,
 				Strategy:        algo.TransformAndPredict,

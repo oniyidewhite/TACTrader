@@ -23,12 +23,12 @@ func GetRuntimeConfig() (Config, error) {
 	if len(data) < 5 {
 		// TODO: After testing, we should always return an error.
 		return Config{
-			BinanceApiKey:     "",
-			BinanceSecretKey:  "",
+			BinanceApiKey:     "Mfpigzy8gOhI37iGKYF0f98c8dJnwCRKCHjO3T00djOKDNUDz0M15llUQCwnYeIp",
+			BinanceSecretKey:  "kQXhkAnjMdv8mbfF3yTJqDqt1Xsf14xMfydnSkSgHsEt89AiOim1ZLEORZ1NOMBT",
 			Interval:          "1m",
 			PercentageLotSize: 0.023,
-			TradeAmount:       2,
-			TestType:          "local",
+			TradeAmount:       1,
+			TestType:          "",
 		}, nil
 	}
 

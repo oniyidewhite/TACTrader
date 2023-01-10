@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/adshao/go-binance/v2"
 	"github.com/adshao/go-binance/v2/futures"
@@ -36,34 +37,53 @@ func NewAdapter(config settings.Config) *binanceAdapter {
 	}
 }
 
-// UpdateConfiguration runs any needed configuration to the trade executor
-func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...strategy.PairConfig) error {
+// UpdateConfiguration runs any needed configuration to the trade executor, returns only valid paris that we were able to configure.
+func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...strategy.PairConfig) ([]strategy.PairConfig, error) {
 	// There's no need to update config in test mode.
 	if b.isTestMode {
-		return nil
+		return pairs, nil
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	var updatedPairs []strategy.PairConfig
+	validPairs := make(chan strategy.PairConfig)
+	g := errgroup.Group{}
 	for _, pair := range pairs {
 		p := pair
 		g.Go(func() error {
-			return b.setLeverage(ctx, expert.Pair(p.Pair))
+			err := b.setLeverage(ctx, expert.Pair(p.Pair))
+			if err != nil {
+				// Do not log unsupported pairs [just silently ignore]
+				// logger.Error(ctx, "skipping: unable to update leverage", zap.Any("symbol", p.Pair), zap.Error(err))
+			} else {
+				validPairs <- p
+			}
+			return err
 		})
 		g.Go(func() error {
 			return b.enableIsolatedTrading(ctx, expert.Pair(p.Pair))
 		})
 	}
 
-	return g.Wait()
+	g.Go(func() error {
+		<-time.After(10 * time.Second)
+		close(validPairs)
+		return nil
+	})
+
+	for v := range validPairs {
+		updatedPairs = append(updatedPairs, v)
+	}
+
+	return updatedPairs, nil
 }
 
 func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
 	ctx = logger.With(ctx,
 		zap.Any("p", params.Pair),
 		zap.Any("ty", params.TradeType),
-		zap.Float64("ot", params.OpenTradeAt),
-		zap.Float64("tp", params.TakeProfitAt),
-		zap.Float64("sl", params.StopLossAt),
+		zap.Any("ot", params.OpenTradeAt),
+		zap.Any("tp", params.TakeProfitAt),
+		zap.Any("sl", params.StopLossAt),
 		zap.Any("tz", params.TradeSize),
 		zap.Any("atr", params.Attribs))
 
@@ -131,8 +151,8 @@ func (b *binanceAdapter) placeLong(ctx context.Context, params expert.TradeParam
 	res, err := b.client.NewCreateOrderService().
 		Symbol(string(params.Pair)).
 		PositionSide(futures.PositionSideTypeLong).
-		Price(fmt.Sprintf("%f", params.OpenTradeAt)).
-		StopPrice(fmt.Sprintf("%f", params.StopLossAt)).
+		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
+		StopPrice(fmt.Sprintf("%s", params.StopLossAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeBuy).
 		Type(futures.OrderTypeStop). //OrderTypeStopMarket, ClosePosition(true).
@@ -155,8 +175,8 @@ func (b *binanceAdapter) placeShort(ctx context.Context, params expert.TradePara
 	res, err := b.client.NewCreateOrderService().
 		Symbol(string(params.Pair)).
 		PositionSide(futures.PositionSideTypeShort).
-		Price(fmt.Sprintf("%f", params.OpenTradeAt)).
-		StopPrice(fmt.Sprintf("%f", params.StopLossAt)).
+		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
+		StopPrice(fmt.Sprintf("%s", params.StopLossAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeSell).
 		Type(futures.OrderTypeStop). //OrderTypeStopMarket, ClosePosition(true).

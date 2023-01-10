@@ -3,6 +3,8 @@ package expert
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,15 +52,28 @@ func (c *Candle) IsUp() bool {
 // TradeParams for initiating a trade
 type TradeParams struct {
 	TradeType    TradeType          `json:"trade_type"`
-	OpenTradeAt  float64            `json:"open_trade_at"`
+	OpenTradeAt  string             `json:"open_trade_at"`
 	OrderID      string             `json:"order_id"`
-	TakeProfitAt float64            `json:"take_profit_at"`
-	StopLossAt   float64            `json:"stop_loss_at"`
+	TakeProfitAt string             `json:"take_profit_at"`
+	StopLossAt   string             `json:"stop_loss_at"`
 	TradeSize    string             `json:"trade_size"`
 	Rating       int                `json:"rating"` // Deprecated
 	Pair         Pair               `json:"pair"`
 	CreatedAt    time.Time          `json:"time"`
 	Attribs      map[string]float64 `json:"others"`
+}
+
+func (t TradeParams) OpenTradeAtV() float64 {
+	r, _ := strconv.ParseFloat(t.OpenTradeAt, 64)
+	return r
+}
+func (t TradeParams) TakeProfitAtV() float64 {
+	r, _ := strconv.ParseFloat(t.TakeProfitAt, 64)
+	return r
+}
+func (t TradeParams) StopLossAtV() float64 {
+	r, _ := strconv.ParseFloat(t.StopLossAt, 64)
+	return r
 }
 
 type TradeData struct {
@@ -93,6 +108,7 @@ type RecordConfig struct {
 	LotSize         float64
 	RatioToOne      float64
 	CandleSize      int
+	QuotePrecision  int
 	DefaultAnalysis []*CalculateAction
 }
 
@@ -172,27 +188,28 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 }
 
 func (s *system) processTrade(ctx context.Context, c Candle, transform Transform, config RecordConfig, dataset []*Candle) {
+	ctx = context.WithValue(ctx, "p", config.QuotePrecision)
 	result := transform(ctx, c, dataset)
 	// Check if we can act on the data
 	if result == nil {
 		return
 	}
 
-	var lotSize = config.LotSize * result.OpenTradeAt
-	var tradeSize = (1 / result.OpenTradeAt) * s.settings.TradeAmount
+	var lotSize = config.LotSize * result.OpenTradeAtV()
+	var tradeSize = (1 / result.OpenTradeAtV()) * s.settings.TradeAmount
 	switch result.TradeType {
 	case TradeTypeLong:
-		stopLoss := result.OpenTradeAt - lotSize
-		takeProfit := result.OpenTradeAt + (lotSize * config.RatioToOne)
-		result.TakeProfitAt = takeProfit
-		result.StopLossAt = stopLoss
-		result.TradeSize = fmt.Sprintf("%f", tradeSize)
+		stopLoss := result.OpenTradeAtV() - lotSize
+		takeProfit := result.OpenTradeAtV() + (lotSize * config.RatioToOne)
+		result.TakeProfitAt = Precision(takeProfit, config.QuotePrecision)
+		result.StopLossAt = Precision(stopLoss, config.QuotePrecision)
+		result.TradeSize = fmt.Sprintf("%s", Precision(tradeSize, config.QuotePrecision))
 	case TradeTypeShort:
-		stopLoss := result.OpenTradeAt + lotSize
-		takeProfit := result.OpenTradeAt - (lotSize * config.RatioToOne)
-		result.TakeProfitAt = takeProfit
-		result.StopLossAt = stopLoss
-		result.TradeSize = fmt.Sprintf("%f", tradeSize)
+		stopLoss := result.OpenTradeAtV() + lotSize
+		takeProfit := result.OpenTradeAtV() - (lotSize * config.RatioToOne)
+		result.TakeProfitAt = Precision(takeProfit, config.QuotePrecision)
+		result.StopLossAt = Precision(stopLoss, config.QuotePrecision)
+		result.TradeSize = fmt.Sprintf("%s", Precision(tradeSize, config.QuotePrecision))
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
@@ -202,7 +219,7 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	if result != nil {
 		trd, err := s.orderService.PlaceTrade(ctx, *result)
 		if err != nil {
-			logger.Error(ctx, "ea_trader: unable to place trade", zap.Error(err))
+			logger.Error(ctx, "ea_trader: unable to place trade", zap.Error(err), zap.Any("d", result))
 			return
 		}
 
@@ -210,6 +227,28 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 
 		write(result.Pair, result)
 	}
+}
+
+func Precision(v float64, p int) string {
+	vStr := fmt.Sprintf("%v", v)
+	splits := strings.Split(vStr, ".")
+
+	if len(splits) != 2 {
+		return fmt.Sprintf("%v", v)
+	}
+
+	newValue := splits[0]
+	minor := splits[1]
+	if len(minor) > (p) {
+		minor = minor[:p]
+	}
+	for len(minor) < (p) {
+		minor += "0"
+	}
+
+	pValue := newValue + "." + minor
+
+	return pValue
 }
 
 func (s *system) tradeClosed(pair Pair) {
@@ -229,21 +268,21 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 	// try closing based on trade type.
 	switch params.TradeType {
 	case TradeTypeLong:
-		if candle.Close >= params.TakeProfitAt {
+		if candle.Close >= params.TakeProfitAtV() {
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  false,
 				SellTradeAt: candle.Close,
-				PL:          candle.Close - params.OpenTradeAt,
+				PL:          candle.Close - params.OpenTradeAtV(),
 				Pair:        candle.Pair,
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,
 				TradeType:   params.TradeType,
 			})
-		} else if candle.Close <= params.StopLossAt {
+		} else if candle.Close <= params.StopLossAtV() {
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  true,
 				SellTradeAt: candle.Close,
-				PL:          candle.Close - params.OpenTradeAt,
+				PL:          candle.Close - params.OpenTradeAtV(),
 				Pair:        candle.Pair,
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,
@@ -251,21 +290,21 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 			})
 		}
 	case TradeTypeShort:
-		if candle.Close <= params.TakeProfitAt {
+		if candle.Close <= params.TakeProfitAtV() {
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  false,
 				SellTradeAt: candle.Close,
-				PL:          params.OpenTradeAt - candle.Close,
+				PL:          params.OpenTradeAtV() - candle.Close,
 				Pair:        candle.Pair,
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,
 				TradeType:   params.TradeType,
 			})
-		} else if candle.Close >= params.StopLossAt {
+		} else if candle.Close >= params.StopLossAtV() {
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  true,
 				SellTradeAt: candle.Close,
-				PL:          params.OpenTradeAt - candle.Close,
+				PL:          params.OpenTradeAtV() - candle.Close,
 				Pair:        candle.Pair,
 				TradeSize:   params.TradeSize,
 				OrderID:     params.OrderID,

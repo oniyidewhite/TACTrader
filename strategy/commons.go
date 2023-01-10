@@ -37,9 +37,10 @@ type Candle struct {
 
 // PairConfig represent a crypto pair configuration
 type PairConfig struct {
-	Pair     string
-	Period   string
-	Strategy expert.Transform
+	QuotePrecision int
+	Pair           string
+	Period         string
+	Strategy       expert.Transform
 	// Represent the percentage change
 	LotSize         float64
 	RatioToOne      float64

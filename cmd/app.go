@@ -48,7 +48,8 @@ func main() {
 	// Create orders adapter.
 	orderAdapter := orders.NewAdapter(config)
 	// Set futures configuration on trading platform
-	if err := orderAdapter.UpdateConfiguration(ctx, supportedPairs...); err != nil {
+	supportedPairs, err = orderAdapter.UpdateConfiguration(ctx, supportedPairs...)
+	if err != nil {
 		logger.Fatal(err)
 	}
 
