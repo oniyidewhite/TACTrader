@@ -3,6 +3,7 @@ package finder
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	settings "github.com/oblessing/artisgo"
@@ -30,6 +31,7 @@ type CryptoPair struct {
 		MinPrice   string `json:"minPrice"`
 		MaxPrice   string `json:"maxPrice"`
 		TickSize   string `json:"tickSize"`
+		StepSize   string `json:"stepSize"`
 	} `json:"filters"`
 }
 
@@ -68,7 +70,7 @@ func (a finderAdapter) GetSupportedAssets(ctx context.Context) ([]strategy.PairC
 }
 
 func (a finderAdapter) lotSize() float64 {
-	return a.config.PercentageLotSize / 100
+	return a.config.PercentageLotSize
 }
 
 func (a finderAdapter) isUSDT(input string) bool {
@@ -86,12 +88,16 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	var result = []strategy.PairConfig{}
 
 	// TODO: find a better way to pass in the strategy
-	algo := strategy.NewReversalScrapingStrategy()
+	algo := strategy.NewReversalScrapingStrategy() // NewWolfieStrategy()
 
 	for _, pair := range list {
 		if a.isUSDT(pair.Symbol) && pair.IsMarginTradingAllowed {
+			minPrice := findValueForKey("PRICE_FILTER", pair)
+			stepSize := findValueForKey("LOT_SIZE", pair)
+			precision := pair.QuotePrecision
+
 			result = append(result, strategy.PairConfig{
-				QuotePrecision:  pair.QuotePrecision,
+				AdditionalData:  []string{minPrice, stepSize, fmt.Sprintf("%v", precision)},
 				Pair:            pair.Symbol,
 				Period:          a.config.Interval,
 				Strategy:        algo.TransformAndPredict,
@@ -104,4 +110,18 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	}
 
 	return result
+}
+
+func findValueForKey(key string, in CryptoPair) string {
+	for _, v := range in.Filters {
+		if v.FilterType == key {
+			result := v.TickSize
+			if len(result) == 0 {
+				return v.StepSize
+			}
+			return result
+		}
+	}
+
+	return ""
 }

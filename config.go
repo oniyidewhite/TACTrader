@@ -15,7 +15,7 @@ type Config struct {
 }
 
 func (c Config) IsTestMode() bool {
-	return len(c.TestType) != 0
+	return c.TestType == "test"
 }
 
 func GetRuntimeConfig() (Config, error) {
@@ -25,10 +25,10 @@ func GetRuntimeConfig() (Config, error) {
 		return Config{
 			BinanceApiKey:     "Mfpigzy8gOhI37iGKYF0f98c8dJnwCRKCHjO3T00djOKDNUDz0M15llUQCwnYeIp",
 			BinanceSecretKey:  "kQXhkAnjMdv8mbfF3yTJqDqt1Xsf14xMfydnSkSgHsEt89AiOim1ZLEORZ1NOMBT",
-			Interval:          "1m",
-			PercentageLotSize: 0.023,
-			TradeAmount:       1,
-			TestType:          "",
+			Interval:          "15m",
+			PercentageLotSize: 211,
+			TradeAmount:       10,
+			TestType:          "test",
 		}, nil
 	}
 
@@ -48,7 +48,7 @@ func GetRuntimeConfig() (Config, error) {
 		Interval:          data[0],
 		PercentageLotSize: value,
 		TradeAmount:       tradeAmount,
-		TestType:          "remote",
+		TestType:          data[5],
 	}, nil
 }
 

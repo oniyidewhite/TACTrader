@@ -2,35 +2,15 @@ package strategy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/oblessing/artisgo/expert"
 )
 
-const (
-	first    WState = 0
-	second   WState = 1
-	third    WState = 2
-	fourth   WState = 3
-	complete WState = 4
-)
-
-type WState int
-
 type WTradeInfo struct {
-	short WTradeData
-	long  WTradeData
-}
-
-type WTradeData struct {
-	state WState
-
-	first  float64
-	second float64
-	third  float64
-	fourth float64
+	LowPoint  float64
+	HighPoint float64
 }
 
 type wolfieStrategy struct {
@@ -46,32 +26,36 @@ func NewWolfieStrategy() *wolfieStrategy {
 // TransformAndPredict builds up 4 data points of highs and lows, then predict buy and sell
 func (s *wolfieStrategy) TransformAndPredict(ctx context.Context, trigger expert.Candle, candles []*expert.Candle) *expert.TradeParams {
 	// Monitor long
+	shouldTrade, direction := DetectWolfePatternAndDirection(candles)
+	if !shouldTrade {
+		return nil
+	}
 
-	// Monitor short
+	if direction == Bullish {
+		rr := s.getTradeInfo(trigger.Pair)
+		rr.LowPoint = MIN
+		rr.HighPoint = MIN
+		s.write(trigger.Pair, rr)
+
+		return &expert.TradeParams{
+			TradeType:   expert.TradeTypeLong,
+			OpenTradeAt: fmt.Sprintf("%f", trigger.Close),
+			Pair:        trigger.Pair,
+		}
+	} else if direction == Bearish {
+		rr := s.getTradeInfo(trigger.Pair)
+		rr.LowPoint = MIN
+		rr.HighPoint = MIN
+		s.write(trigger.Pair, rr)
+
+		return &expert.TradeParams{
+			TradeType:   expert.TradeTypeShort,
+			OpenTradeAt: fmt.Sprintf("%f", trigger.Close),
+			Pair:        trigger.Pair,
+		}
+	}
+
 	return nil
-}
-
-func (s *wolfieStrategy) process(candles []*expert.Candle) (expert.TradeParams, error) {
-	// Check if data is valid i guess.
-	c := candles[0]
-	if c == nil {
-		return expert.TradeParams{}, errors.New("no data")
-	}
-
-	// get trade info
-	params := s.getTradeInfo(c.Pair)
-	fmt.Println(params)
-
-	// find trend
-	trend := s.findTrend(candles)
-
-	switch trend {
-	case Green:
-
-	case Red:
-	}
-
-	return expert.TradeParams{}, nil
 }
 
 func (s *wolfieStrategy) getTradeInfo(pair expert.Pair) WTradeInfo {
@@ -96,51 +80,110 @@ func (s *wolfieStrategy) read(key expert.Pair) (WTradeInfo, bool) {
 	return result.(WTradeInfo), ok
 }
 
-func (s *wolfieStrategy) lowest(candles []*expert.Candle) (float64, error) {
-	if len(candles) == 0 {
-		return 0, errors.New("no data")
-	}
-
-	lowest := candles[0].Low
-
-	for _, c := range candles {
-		if lowest > c.Low {
-			lowest = c.Low
-		}
-	}
-
-	return lowest, nil
+type TrendX struct {
+	Start  int
+	End    int
+	Type   string
+	Points []*expert.Candle
 }
 
-func (s *wolfieStrategy) highest(candles []*expert.Candle) (float64, error) {
-	if len(candles) == 0 {
-		return 0, errors.New("no data")
-	}
-
-	highest := candles[0].High
-
-	for _, c := range candles {
-		if highest < c.High {
-			highest = c.High
-		}
-	}
-
-	return highest, nil
+type WolfePattern struct {
+	UpTrend   *TrendX
+	DownTrend *TrendX
 }
 
-func (s *wolfieStrategy) findTrend(candles []*expert.Candle) Trend {
-	if len(candles) < 4 {
-		return Unknown
+func calculateTrend(points []*expert.Candle, length int, trendType string) *TrendX {
+	//var trend TrendX
+	trendTypePrefix := "Up"
+	if trendType == "down" {
+		trendTypePrefix = "Down"
 	}
-
-	var isGreen = isGreen(*candles[0]) && isGreen(*candles[1]) && isGreen(*candles[2]) && isGreen(*candles[3])
-	var isRed = isRed(*candles[0]) && isRed(*candles[1]) && isRed(*candles[2]) && isRed(*candles[3])
-
-	if isRed {
-		return Red
-	} else if isGreen {
-		return Green
+	var highestHigh, lowestLow float64
+	var highestHighIndex, lowestLowIndex int
+	for i := length; i < len(points); i++ {
+		for j := i - length; j <= i; j++ {
+			if points[j].High > highestHigh || highestHigh == 0 {
+				highestHigh = points[j].High
+				highestHighIndex = j
+			}
+			if points[j].Low < lowestLow || lowestLow == 0 {
+				lowestLow = points[j].Low
+				lowestLowIndex = j
+			}
+		}
+		if highestHighIndex < lowestLowIndex {
+			break
+		}
 	}
+	if highestHighIndex > 0 && lowestLowIndex > 0 {
+		return &TrendX{
+			Start: highestHighIndex - length,
+			End:   lowestLowIndex,
+			Type:  trendTypePrefix + "Trend",
+			//Points: points[lowestLowIndex+1 : highestHighIndex-length],
+		}
+	}
+	return nil
+}
 
-	return Unknown
+func DetectWolfePattern(points []*expert.Candle) WolfePattern {
+	var upTrend, downTrend *TrendX
+	upTrend = calculateTrend(points, 5, "up")
+	downTrend = calculateTrend(points, 5, "down")
+	return WolfePattern{
+		UpTrend:   upTrend,
+		DownTrend: downTrend,
+	}
+}
+
+// WolfePatternDirection represents the direction of a Wolfe pattern
+type WolfePatternDirection int
+
+const (
+	Bullish WolfePatternDirection = iota
+	Bearish
+)
+
+// DetectWolfePatternAndDirection detects Wolfe patterns in a slice of candlesticks
+// Returns true and the direction if a Wolfe pattern is found, false and an empty direction otherwise
+func DetectWolfePatternAndDirection(data []*expert.Candle) (bool, WolfePatternDirection) {
+	if len(data) < 10 {
+		return false, 0
+	}
+	var upTrend, downTrend bool
+	var lastHigh, lastLow float64
+	var point2, _, _ float64
+	for i := 4; i < len(data)-1; i++ {
+		// Check for an up trend
+		if data[i].Close > data[i-2].Close && data[i-2].Close > data[i-4].Close {
+			upTrend = true
+			lastHigh = data[i].High
+			// Check for point 2
+			if lastLow > 0 && data[i-2].Low < lastLow {
+				point2 = data[i-2].Low
+			}
+		} else if data[i].Close < data[i-2].Close && data[i-2].Close < data[i-4].Close {
+			downTrend = true
+			lastLow = data[i].Low
+			// Check for point 2
+			if lastHigh > 0 && data[i-2].High > lastHigh {
+				point2 = data[i-2].High
+			}
+		}
+		// Check for point 3 and point 4
+		if upTrend && downTrend {
+			if point2 > 0 && data[i-1].Low < point2 {
+				_ = data[i-1].Low
+				_ = data[i].High
+				return true, Bullish
+			} else if point2 > 0 && data[i-1].High > point2 {
+				_ = data[i-1].High
+				_ = data[i].Low
+				return true, Bearish
+			}
+			upTrend = false
+			downTrend = false
+		}
+	}
+	return false, 0
 }

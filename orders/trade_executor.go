@@ -30,7 +30,7 @@ type OrderService interface {
 }
 
 func NewAdapter(config settings.Config) *binanceAdapter {
-	binance.UseTestnet = config.IsTestMode()
+	//binance.UseTestnet = config.IsTestMode()
 	return &binanceAdapter{
 		client:     binance.NewFuturesClient(config.BinanceApiKey, config.BinanceSecretKey),
 		isTestMode: config.IsTestMode(),
@@ -86,6 +86,14 @@ func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradePara
 		zap.Any("sl", params.StopLossAt),
 		zap.Any("tz", params.TradeSize),
 		zap.Any("atr", params.Attribs))
+
+	if params.OpenTradeAt == params.TakeProfitAt {
+		return expert.TradeData{}, errors.New("can not open a trade at the take profit position")
+	}
+
+	if params.OpenTradeAt == params.StopLossAt {
+		return expert.TradeData{}, errors.New("can not open a trade at the take stoploss position")
+	}
 
 	if b.isTestMode {
 		logger.Info(ctx, "placed order")
@@ -152,10 +160,10 @@ func (b *binanceAdapter) placeLong(ctx context.Context, params expert.TradeParam
 		Symbol(string(params.Pair)).
 		PositionSide(futures.PositionSideTypeLong).
 		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
-		StopPrice(fmt.Sprintf("%s", params.StopLossAt)).
+		StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeBuy).
-		Type(futures.OrderTypeStop). //OrderTypeStopMarket, ClosePosition(true).
+		Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
 		TimeInForce(futures.TimeInForceTypeFOK).
 		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
 		Do(ctx)
@@ -176,10 +184,10 @@ func (b *binanceAdapter) placeShort(ctx context.Context, params expert.TradePara
 		Symbol(string(params.Pair)).
 		PositionSide(futures.PositionSideTypeShort).
 		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
-		StopPrice(fmt.Sprintf("%s", params.StopLossAt)).
+		StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeSell).
-		Type(futures.OrderTypeStop). //OrderTypeStopMarket, ClosePosition(true).
+		Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
 		TimeInForce(futures.TimeInForceTypeFOK).
 		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
 		Do(ctx)

@@ -3,6 +3,7 @@ package expert
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,16 +52,17 @@ func (c *Candle) IsUp() bool {
 
 // TradeParams for initiating a trade
 type TradeParams struct {
-	TradeType    TradeType          `json:"trade_type"`
-	OpenTradeAt  string             `json:"open_trade_at"`
-	OrderID      string             `json:"order_id"`
-	TakeProfitAt string             `json:"take_profit_at"`
-	StopLossAt   string             `json:"stop_loss_at"`
-	TradeSize    string             `json:"trade_size"`
-	Rating       int                `json:"rating"` // Deprecated
-	Pair         Pair               `json:"pair"`
-	CreatedAt    time.Time          `json:"time"`
-	Attribs      map[string]float64 `json:"others"`
+	TradeType      TradeType          `json:"trade_type"`
+	OpenTradeAt    string             `json:"open_trade_at"`
+	OrderID        string             `json:"order_id"`
+	TakeProfitAt   string             `json:"take_profit_at"`
+	StopLossAt     string             `json:"stop_loss_at"`
+	TradeSize      string             `json:"trade_size"`
+	Rating         int                `json:"rating"` // Deprecated
+	Pair           Pair               `json:"pair"`
+	CreatedAt      time.Time          `json:"time"`
+	Attribs        map[string]float64 `json:"others"`
+	CanNotOverride bool               `json:"canNotOverride"`
 }
 
 func (t TradeParams) OpenTradeAtV() float64 {
@@ -108,7 +110,7 @@ type RecordConfig struct {
 	LotSize         float64
 	RatioToOne      float64
 	CandleSize      int
-	QuotePrecision  int
+	AdditionalData  []string // minPrice, stepSize, precision
 	DefaultAnalysis []*CalculateAction
 }
 
@@ -188,28 +190,34 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 }
 
 func (s *system) processTrade(ctx context.Context, c Candle, transform Transform, config RecordConfig, dataset []*Candle) {
-	ctx = context.WithValue(ctx, "p", config.QuotePrecision)
+	lotPrecision := findPrecision(config.AdditionalData[1])
+	quotePrecision := findPrecision(config.AdditionalData[0])
+
 	result := transform(ctx, c, dataset)
 	// Check if we can act on the data
 	if result == nil {
 		return
 	}
 
-	var lotSize = config.LotSize * result.OpenTradeAtV()
 	var tradeSize = (1 / result.OpenTradeAtV()) * s.settings.TradeAmount
+
 	switch result.TradeType {
 	case TradeTypeLong:
-		stopLoss := result.OpenTradeAtV() - lotSize
-		takeProfit := result.OpenTradeAtV() + (lotSize * config.RatioToOne)
-		result.TakeProfitAt = Precision(takeProfit, config.QuotePrecision)
-		result.StopLossAt = Precision(stopLoss, config.QuotePrecision)
-		result.TradeSize = fmt.Sprintf("%s", Precision(tradeSize, config.QuotePrecision))
+		stopLoss := result.OpenTradeAtV() - ((result.OpenTradeAtV()) / config.LotSize)
+		// since leverage is 10 times
+		// current price + ((current price * ratio) / 10)
+		var takeProfit = result.OpenTradeAtV() + ((result.OpenTradeAtV() * config.RatioToOne) / config.LotSize)
+		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
+		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
+		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
 	case TradeTypeShort:
-		stopLoss := result.OpenTradeAtV() + lotSize
-		takeProfit := result.OpenTradeAtV() - (lotSize * config.RatioToOne)
-		result.TakeProfitAt = Precision(takeProfit, config.QuotePrecision)
-		result.StopLossAt = Precision(stopLoss, config.QuotePrecision)
-		result.TradeSize = fmt.Sprintf("%s", Precision(tradeSize, config.QuotePrecision))
+		stopLoss := result.OpenTradeAtV() + ((result.OpenTradeAtV()) / config.LotSize)
+		// since leverage is 10 times
+		// current price + ((current price * ratio) / 10)
+		var takeProfit = result.OpenTradeAtV() - ((result.OpenTradeAtV() * config.RatioToOne) / config.LotSize)
+		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
+		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
+		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
@@ -229,26 +237,40 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	}
 }
 
-func Precision(v float64, p int) string {
-	vStr := fmt.Sprintf("%v", v)
-	splits := strings.Split(vStr, ".")
-
-	if len(splits) != 2 {
-		return fmt.Sprintf("%v", v)
+func findPrecision(v string) uint8 {
+	data := strings.Split(v, ".")
+	if len(data) == 2 {
+		var result uint8 = 0
+		for _, i := range data[1] {
+			if i == '0' {
+				result += 1
+			} else {
+				return result + 1
+			}
+		}
 	}
 
-	newValue := splits[0]
-	minor := splits[1]
-	if len(minor) > (p) {
-		minor = minor[:p]
-	}
-	for len(minor) < (p) {
-		minor += "0"
+	return 0
+}
+
+// RoundToDecimalPoint take an amount then rounds it to the upper 2 decimal point if the value is more than 2 decimal point.
+func RoundToDecimalPoint(amount float64, precision uint8) float64 {
+	amountString := fmt.Sprintf("%v", amount)
+
+	amountSplit := strings.Split(amountString, ".")
+
+	if len(amountSplit) != 2 {
+		return amount
 	}
 
-	pValue := newValue + "." + minor
+	if len(amountSplit[1]) <= int(precision) {
+		return amount
+	}
 
-	return pValue
+	valueAmount := fmt.Sprintf("%s%s", amountSplit[0], amountSplit[1][:int(precision)])
+	result, _ := strconv.ParseInt(valueAmount, 10, 64)
+
+	return float64(result+1) / math.Pow(float64(10), float64(precision))
 }
 
 func (s *system) tradeClosed(pair Pair) {

@@ -3,6 +3,7 @@ package strategy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"go.uber.org/zap"
@@ -31,7 +32,6 @@ func NewReversalScrapingStrategy() *reversalScrapingStrategy {
 // TransformAndPredict marks top and bottom of candle then use that information start,// Review this logic, something is still broken
 func (s *reversalScrapingStrategy) TransformAndPredict(ctx context.Context, trigger expert.Candle, candles []*expert.Candle) *expert.TradeParams {
 	// find first candle
-	p := ctx.Value("p").(int)
 	candle, err := findFirstNonNil(candles)
 	if err != nil {
 		logger.Error(ctx, "findFirstNonNil failed", zap.Error(err))
@@ -70,7 +70,7 @@ func (s *reversalScrapingStrategy) TransformAndPredict(ctx context.Context, trig
 			// long
 			return &expert.TradeParams{
 				TradeType:   expert.TradeTypeLong,
-				OpenTradeAt: expert.Precision(trigger.Close, p),
+				OpenTradeAt: fmt.Sprintf("%v", trigger.Close),
 				Pair:        candle.Pair,
 			}
 		}
@@ -89,7 +89,7 @@ func (s *reversalScrapingStrategy) TransformAndPredict(ctx context.Context, trig
 			// long
 			return &expert.TradeParams{
 				TradeType:   expert.TradeTypeShort,
-				OpenTradeAt: expert.Precision(trigger.Close, p),
+				OpenTradeAt: fmt.Sprintf("%v", trigger.Close),
 				Pair:        candle.Pair,
 			}
 		}

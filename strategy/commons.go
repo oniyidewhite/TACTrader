@@ -3,6 +3,10 @@ package strategy
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/oblessing/artisgo/expert"
@@ -37,7 +41,7 @@ type Candle struct {
 
 // PairConfig represent a crypto pair configuration
 type PairConfig struct {
-	QuotePrecision int
+	AdditionalData []string // minPrice, stepSize, precision
 	Pair           string
 	Period         string
 	Strategy       expert.Transform
@@ -126,4 +130,24 @@ func GetDefaultAnalysis() []*expert.CalculateAction {
 			Action: VMA,
 		},
 	}
+}
+
+// RoundToDecimalPoint take an amount then rounds it to the upper 2 decimal point if the value is more than 2 decimal point.
+func RoundToDecimalPoint(amount float64, precision uint8) float64 {
+	amountString := fmt.Sprintf("%v", amount)
+
+	amountSplit := strings.Split(amountString, ".")
+
+	if len(amountSplit) != 2 {
+		return amount
+	}
+
+	if len(amountSplit[1]) <= int(precision) {
+		return amount
+	}
+
+	valueAmount := fmt.Sprintf("%s%s", amountSplit[0], amountSplit[1][:int(precision)])
+	result, _ := strconv.ParseInt(valueAmount, 10, 64)
+
+	return float64(result+1) / math.Pow(float64(10), float64(precision))
 }

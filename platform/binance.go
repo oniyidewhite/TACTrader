@@ -44,7 +44,7 @@ func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConf
 				ctx := context.Background()
 
 				r.trader.Record(ctx, convert(event), p.Strategy, expert.RecordConfig{
-					QuotePrecision:  p.QuotePrecision,
+					AdditionalData:  p.AdditionalData,
 					LotSize:         p.LotSize,
 					RatioToOne:      p.RatioToOne,
 					CandleSize:      p.CandleSize,
