@@ -205,11 +205,18 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 
 	// use RSI to deduce the direction, extreme high(short) extreme low(long)
 	// // 82, 93 || 27
-	rsi := result.Attribs["RSI"]
+	rsi, ok := c.OtherData["RSI"]
+	if !ok {
+		logger.Info(ctx, "no rsi value", zap.Any("d", result))
+		return
+	}
 	if rsi > 81 {
 		result.TradeType = TradeTypeShort
 	} else if rsi < 23 {
 		result.TradeType = TradeTypeLong
+	} else {
+		logger.Info(ctx, "skipping", zap.Any("d", result))
+		return
 	}
 
 	switch result.TradeType {
@@ -221,10 +228,10 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
-		if rsi > 15 {
-			logger.Info(ctx, "rsi is larger than 30")
-			return
-		}
+		//if rsi > 15 {
+		//	logger.Info(ctx, "rsi is larger than 15")
+		//	return
+		//}
 	case TradeTypeShort:
 		stopLoss := result.OpenTradeAtV() + ((result.OpenTradeAtV()) / config.LotSize)
 		// since leverage is 10 times
@@ -233,10 +240,10 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
-		if rsi > 85 {
-			logger.Info(ctx, "rsi is less than 70")
-			return
-		}
+		//if rsi > 85 {
+		//	logger.Info(ctx, "rsi is less than 70")
+		//	return
+		//}
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
