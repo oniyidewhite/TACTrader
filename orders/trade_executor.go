@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/adshao/go-binance/v2"
@@ -50,17 +49,20 @@ func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...strat
 	for _, pair := range pairs {
 		p := pair
 		g.Go(func() error {
-			err := b.setLeverage(ctx, expert.Pair(p.Pair))
+			err := b.enableIsolatedTrading(ctx, expert.Pair(p.Pair))
 			if err != nil {
 				// Do not log unsupported pairs [just silently ignore]
-				// logger.Error(ctx, "skipping: unable to update leverage", zap.Any("symbol", p.Pair), zap.Error(err))
+				logger.Error(ctx, "skipping: enableIsolatedTrading", zap.Any("symbol", p.Pair), zap.Error(err))
+				//return err
+			}
+			err = b.setLeverage(ctx, expert.Pair(p.Pair))
+			if err != nil {
+				// Do not log unsupported pairs [just silently ignore]
+				logger.Error(ctx, "skipping: unable to update leverage", zap.Any("symbol", p.Pair), zap.Error(err))
 			} else {
 				validPairs <- p
 			}
 			return err
-		})
-		g.Go(func() error {
-			return b.enableIsolatedTrading(ctx, expert.Pair(p.Pair))
 		})
 	}
 
@@ -130,15 +132,22 @@ func (b *binanceAdapter) CloseTrade(ctx context.Context, params expert.SellParam
 		return true, nil
 	}
 
-	orderID, err := strconv.ParseInt(params.OrderID, 10, 64)
+	var side = futures.SideTypeSell
+	if params.TradeType == expert.TradeTypeShort {
+		side = futures.SideTypeBuy
+	}
+
+	res, err := b.client.NewCreateOrderService().Symbol(string(params.Pair)).Side(side).Quantity(params.TradeSize).Type(futures.OrderTypeMarket).Do(ctx) //.NewCancelOrderService().Symbol(string(params.Pair)).OrderID(orderID).Do(ctx)
 	if err != nil {
+		if params.IsStopLoss {
+			// The trade already close, trust me. lol 🌚
+			return true, nil
+		}
+
 		return false, err
 	}
 
-	_, err = b.client.NewCancelOrderService().Symbol(string(params.Pair)).OrderID(orderID).Do(ctx)
-	if err != nil {
-		return false, err
-	}
+	logger.Info(ctx, "order: close trade", zap.Any("response", res))
 
 	return true, nil
 }
@@ -151,24 +160,30 @@ func (b *binanceAdapter) enableIsolatedTrading(ctx context.Context, pair expert.
 
 // SetLeverage tells binance to use a specific amount for this trade.
 func (b *binanceAdapter) setLeverage(ctx context.Context, pair expert.Pair) error {
-	_, err := b.client.NewChangeLeverageService().Symbol(string(pair)).Leverage(10).Do(ctx)
+	_, err := b.client.NewChangeLeverageService().Symbol(string(pair)).Leverage(20).Do(ctx)
 	return err
 }
 
 func (b *binanceAdapter) placeLong(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
 	res, err := b.client.NewCreateOrderService().
 		Symbol(string(params.Pair)).
-		PositionSide(futures.PositionSideTypeLong).
+		PositionSide(futures.PositionSideTypeBoth).
+		Side(futures.SideTypeBuy).
 		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
-		StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
+		//StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeBuy).
-		Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
+		Type(futures.OrderTypeLimit).
+		//Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
 		TimeInForce(futures.TimeInForceTypeFOK).
 		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
 		Do(ctx)
 	if err != nil {
 		return expert.TradeData{}, err
+	}
+
+	if res.Status == "EXPIRED" {
+		return expert.TradeData{}, errors.New("trade expired")
 	}
 
 	logger.Info(ctx, "order: placed long", zap.Any("response", res))
@@ -182,12 +197,14 @@ func (b *binanceAdapter) placeLong(ctx context.Context, params expert.TradeParam
 func (b *binanceAdapter) placeShort(ctx context.Context, params expert.TradeParams) (expert.TradeData, error) {
 	res, err := b.client.NewCreateOrderService().
 		Symbol(string(params.Pair)).
-		PositionSide(futures.PositionSideTypeShort).
+		PositionSide(futures.PositionSideTypeBoth).
+		Side(futures.SideTypeSell).
 		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
-		StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
+		//StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeSell).
-		Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
+		Type(futures.OrderTypeLimit).
+		//Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
 		TimeInForce(futures.TimeInForceTypeFOK).
 		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
 		Do(ctx)

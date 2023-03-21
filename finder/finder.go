@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	settings "github.com/oblessing/artisgo"
 	"github.com/oblessing/artisgo/strategy"
 )
 
 const (
-	binanceAPI = "https://api.binance.com/api/v3/exchangeInfo"
+	binanceAPI = "https://fapi.binance.com/fapi/v1/exchangeInfo"
 )
 
 type finderAdapter struct {
@@ -23,10 +25,10 @@ type Service interface {
 }
 
 type CryptoPair struct {
-	Symbol                 string `json:"symbol"`
-	IsMarginTradingAllowed bool   `json:"isMarginTradingAllowed"`
-	QuotePrecision         int    `json:"quotePrecision"`
-	Filters                []struct {
+	Symbol string `json:"symbol"`
+	//IsMarginTradingAllowed bool   `json:"isMarginTradingAllowed"`
+	QuotePrecision int `json:"quotePrecision"`
+	Filters        []struct {
 		FilterType string `json:"filterType"`
 		MinPrice   string `json:"minPrice"`
 		MaxPrice   string `json:"maxPrice"`
@@ -44,29 +46,94 @@ func NewFinderAdapter(config settings.Config) Service {
 // GetSupportedAssets gets all the usdt pairs from binance.
 func (a finderAdapter) GetSupportedAssets(ctx context.Context) ([]strategy.PairConfig, error) {
 	// make api call
-	request, err := http.NewRequestWithContext(ctx, "GET", binanceAPI, nil)
-	if err != nil {
-		return []strategy.PairConfig{}, err
+	var pairs []CryptoPair
+
+	// Get from API
+	if a.config.IsBypass {
+		allCryptos, err2 := getPairFromFile(ctx)
+		if err2 != nil {
+			return []strategy.PairConfig{}, err2
+		}
+		pairs = allCryptos.Symbols
+	} else {
+		allCryptos, err2 := getPairsFromBinance(ctx)
+		if err2 != nil {
+			return []strategy.PairConfig{}, err2
+		}
+		pairs = allCryptos.Symbols
 	}
 
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return []strategy.PairConfig{}, err
-	}
+	// pick only usdt pairs
+	return a.filterAndMap(pairs), nil
+}
 
-	defer resp.Body.Close()
+func getPairFromFile(ctx context.Context) (struct {
+	Symbols []CryptoPair `json:"symbols"`
+}, error) {
+	body, err := io.ReadAll(strings.NewReader(data))
+	if err != nil {
+		return struct {
+			Symbols []CryptoPair `json:"symbols"`
+		}{}, err
+	}
 
 	var allCryptos struct {
 		Symbols []CryptoPair `json:"symbols"`
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(&allCryptos)
+	err = json.NewDecoder(strings.NewReader(string(body))).Decode(&allCryptos)
 	if err != nil {
-		return []strategy.PairConfig{}, err
+		return struct {
+			Symbols []CryptoPair `json:"symbols"`
+		}{}, err
 	}
 
-	// pick only usdt pairs
-	return a.filterAndMap(allCryptos.Symbols), nil
+	return allCryptos, nil
+}
+
+func getPairsFromBinance(ctx context.Context) (struct {
+	Symbols []CryptoPair `json:"symbols"`
+}, error) {
+	request, err := http.NewRequestWithContext(ctx, "GET", binanceAPI, nil)
+	if err != nil {
+		return struct {
+			Symbols []CryptoPair `json:"symbols"`
+		}{}, err
+	}
+
+	request.Header.Set("Connection", "keep-alive")
+	request.Header.Set("User-Agent", "PostmanRuntime/7.29.2")
+	request.Header.Set("Accept", "*/*")
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return struct {
+			Symbols []CryptoPair `json:"symbols"`
+		}{}, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return struct {
+			Symbols []CryptoPair `json:"symbols"`
+		}{}, err
+	}
+
+	var allCryptos struct {
+		Symbols []CryptoPair `json:"symbols"`
+	}
+
+	bodyString := string(body)
+
+	err = json.NewDecoder(strings.NewReader(bodyString)).Decode(&allCryptos)
+	if err != nil {
+		return struct {
+			Symbols []CryptoPair `json:"symbols"`
+		}{}, err
+	}
+
+	return allCryptos, nil
 }
 
 func (a finderAdapter) lotSize() float64 {
@@ -81,6 +148,10 @@ func (a finderAdapter) isUSDT(input string) bool {
 		check += string(input[i])
 	}
 
+	if strings.Contains(strings.ReplaceAll(input, "USDT", ""), "USD") {
+		return false
+	}
+
 	return check == "USDT"
 }
 
@@ -88,10 +159,10 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	var result = []strategy.PairConfig{}
 
 	// TODO: find a better way to pass in the strategy
-	algo := strategy.NewReversalScrapingStrategy() // NewWolfieStrategy()
+	algo := strategy.NewReversalScrapingStrategy() // .NewWolfieStrategy(true) //
 
 	for _, pair := range list {
-		if a.isUSDT(pair.Symbol) && pair.IsMarginTradingAllowed {
+		if a.isUSDT(pair.Symbol) /* pair.Symbol == "BTCUSDT" || pair.Symbol == "ETHUSDT"  && pair.IsMarginTradingAllowed */ {
 			minPrice := findValueForKey("PRICE_FILTER", pair)
 			stepSize := findValueForKey("LOT_SIZE", pair)
 			precision := pair.QuotePrecision
@@ -102,7 +173,7 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 				Period:          a.config.Interval,
 				Strategy:        algo.TransformAndPredict,
 				LotSize:         a.lotSize(),
-				RatioToOne:      3,
+				RatioToOne:      2,
 				CandleSize:      15,
 				DefaultAnalysis: strategy.GetDefaultAnalysis(),
 			})

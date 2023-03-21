@@ -15,16 +15,49 @@ type WTradeInfo struct {
 
 type wolfieStrategy struct {
 	tradeInfo sync.Map
+	useV2     bool
 }
 
-func NewWolfieStrategy() *wolfieStrategy {
+func NewWolfieStrategy(v2 bool) *wolfieStrategy {
 	return &wolfieStrategy{
 		tradeInfo: sync.Map{},
+		useV2:     v2,
 	}
 }
 
 // TransformAndPredict builds up 4 data points of highs and lows, then predict buy and sell
 func (s *wolfieStrategy) TransformAndPredict(ctx context.Context, trigger expert.Candle, candles []*expert.Candle) *expert.TradeParams {
+	if !s.useV2 {
+		res := DetectWolfePattern(candles)
+
+		if res.DownTrend != nil {
+			rr := s.getTradeInfo(trigger.Pair)
+			rr.LowPoint = MIN
+			rr.HighPoint = MIN
+			s.write(trigger.Pair, rr)
+
+			return &expert.TradeParams{
+				TradeType:   expert.TradeTypeShort,
+				OpenTradeAt: fmt.Sprintf("%f", trigger.Close),
+				Pair:        trigger.Pair,
+			}
+		} else if res.UpTrend != nil {
+			rr := s.getTradeInfo(trigger.Pair)
+			rr.LowPoint = MIN
+			rr.HighPoint = MIN
+			s.write(trigger.Pair, rr)
+
+			return &expert.TradeParams{
+				TradeType:   expert.TradeTypeLong,
+				OpenTradeAt: fmt.Sprintf("%f", trigger.Close),
+				Pair:        trigger.Pair,
+			}
+		}
+
+		return nil
+	}
+
+	// v2
 	// Monitor long
 	shouldTrade, direction := DetectWolfePatternAndDirection(candles)
 	if !shouldTrade {

@@ -2,11 +2,11 @@ package platform
 
 import (
 	"context"
+	"github.com/adshao/go-binance/v2/futures"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/adshao/go-binance/v2"
 	"go.uber.org/zap"
 
 	settings "github.com/oblessing/artisgo"
@@ -40,7 +40,7 @@ func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConf
 	for _, p := range pairs {
 		p := p
 		go func() {
-			wsKlineHandler := func(event *binance.WsKlineEvent) {
+			wsKlineHandler := func(event *futures.WsKlineEvent) {
 				ctx := context.Background()
 
 				r.trader.Record(ctx, convert(event), p.Strategy, expert.RecordConfig{
@@ -56,7 +56,7 @@ func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConf
 			var hasStarted = false
 			for {
 				logger.Info(ctx, "starting watcher", zap.String("pair", p.Pair), zap.String("period", p.Period))
-				doneC, _, err := binance.WsKlineServe(p.Pair, p.Period, wsKlineHandler, errHandler)
+				doneC, _, err := futures.WsKlineServe(p.Pair, p.Period, wsKlineHandler, errHandler)
 				if err != nil {
 					logger.Error(ctx, "start_trading: an error occurred, will resume after 30s", zap.Error(err))
 					<-time.After(30 * time.Second)
@@ -80,7 +80,7 @@ func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConf
 
 // check if we can close this trade.
 // if trade doesn't exist we still return false
-func convert(kline *binance.WsKlineEvent) *expert.Candle {
+func convert(kline *futures.WsKlineEvent) *expert.Candle {
 	high, err := parseString(kline.Kline.High)
 	if err != nil {
 		return nil
@@ -120,8 +120,6 @@ func parseString(value string) (float64, error) {
 
 // NewSymbolDatasource allows us to monitor and receive update during price changes.
 func NewSymbolDatasource(config settings.Config, trader expert.Trader) TradingService {
-	binance.UseTestnet = config.IsTestMode()
-
 	return &myBinance{
 		trader: trader,
 		config: config,

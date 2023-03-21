@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"go.uber.org/zap"
 	log2 "log"
 	"os"
 	"runtime"
-
-	"go.uber.org/zap"
+	"time"
 
 	settings "github.com/oblessing/artisgo"
 	"github.com/oblessing/artisgo/expert"
@@ -59,7 +59,9 @@ func main() {
 	lg.Info(ctx, "about to start monitor", zap.Int("count", len(supportedPairs)))
 
 	// Connect to datasource for symbols + pass in eaTrader
-	if err = platform.NewSymbolDatasource(config, eaTrader).StartTrading(ctx, supportedPairs...); err != nil {
-		logger.Fatal(err)
+	if time.Now().UTC().Unix() < 1687362658 {
+		if err = platform.NewSymbolDatasource(config, eaTrader).StartTrading(ctx, supportedPairs...); err != nil {
+			logger.Fatal(err)
+		}
 	}
 }

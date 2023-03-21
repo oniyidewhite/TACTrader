@@ -12,6 +12,7 @@ type Config struct {
 	PercentageLotSize float64
 	TradeAmount       float64
 	TestType          string
+	IsBypass          bool
 }
 
 func (c Config) IsTestMode() bool {
@@ -23,12 +24,13 @@ func GetRuntimeConfig() (Config, error) {
 	if len(data) < 5 {
 		// TODO: After testing, we should always return an error.
 		return Config{
-			BinanceApiKey:     "Mfpigzy8gOhI37iGKYF0f98c8dJnwCRKCHjO3T00djOKDNUDz0M15llUQCwnYeIp",
-			BinanceSecretKey:  "kQXhkAnjMdv8mbfF3yTJqDqt1Xsf14xMfydnSkSgHsEt89AiOim1ZLEORZ1NOMBT",
-			Interval:          "15m",
-			PercentageLotSize: 211,
-			TradeAmount:       10,
-			TestType:          "test",
+			BinanceApiKey:     "9xGvtPO4gk0WAlbQqv4D1kZvSTCsqDpGNDNt44LrWtB78YWfJjkAHXCwBh8Tm39x",
+			BinanceSecretKey:  "xybN1tX5OTF0YgUlIRtCKeWNWpAkr0hjRMUGa89b54RYeb8MkiU5PFD6cI0G1u4s",
+			Interval:          "3m", //"1m",
+			PercentageLotSize: 20,   //369,
+			TradeAmount:       3,
+			TestType:          "real",
+			IsBypass:          false,
 		}, nil
 	}
 
@@ -42,6 +44,11 @@ func GetRuntimeConfig() (Config, error) {
 		return Config{}, err
 	}
 
+	IsBypass := false
+	if len(data) == 7 {
+		IsBypass = data[6] == "true"
+	}
+
 	return Config{
 		BinanceApiKey:     data[3],
 		BinanceSecretKey:  data[4],
@@ -49,6 +56,7 @@ func GetRuntimeConfig() (Config, error) {
 		PercentageLotSize: value,
 		TradeAmount:       tradeAmount,
 		TestType:          data[5],
+		IsBypass:          IsBypass,
 	}, nil
 }
 

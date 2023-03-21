@@ -190,8 +190,8 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 }
 
 func (s *system) processTrade(ctx context.Context, c Candle, transform Transform, config RecordConfig, dataset []*Candle) {
-	lotPrecision := findPrecision(config.AdditionalData[1])
-	quotePrecision := findPrecision(config.AdditionalData[0])
+	lotPrecision := findNumberOfDecimal(config.AdditionalData[1])
+	quotePrecision := findNumberOfDecimal(config.AdditionalData[0])
 
 	result := transform(ctx, c, dataset)
 	// Check if we can act on the data
@@ -199,7 +199,18 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		return
 	}
 
-	var tradeSize = (1 / result.OpenTradeAtV()) * s.settings.TradeAmount
+	// trading amount is
+	var tradeSize = ((1 / result.OpenTradeAtV()) * s.settings.TradeAmount) * config.LotSize
+	var buyPrice = fmt.Sprintf("%v", RoundToDecimalPoint(result.OpenTradeAtV(), quotePrecision))
+
+	// use RSI to deduce the direction, extreme high(short) extreme low(long)
+	// // 82, 93 || 27
+	rsi := result.Attribs["RSI"]
+	if rsi > 81 {
+		result.TradeType = TradeTypeShort
+	} else if rsi < 23 {
+		result.TradeType = TradeTypeLong
+	}
 
 	switch result.TradeType {
 	case TradeTypeLong:
@@ -210,6 +221,10 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
+		if rsi > 15 {
+			logger.Info(ctx, "rsi is larger than 30")
+			return
+		}
 	case TradeTypeShort:
 		stopLoss := result.OpenTradeAtV() + ((result.OpenTradeAtV()) / config.LotSize)
 		// since leverage is 10 times
@@ -218,11 +233,16 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
+		if rsi > 85 {
+			logger.Info(ctx, "rsi is less than 70")
+			return
+		}
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
 	// Set additional attribs for logging
 	result.Attribs = c.OtherData
+	result.OpenTradeAt = buyPrice
 
 	if result != nil {
 		trd, err := s.orderService.PlaceTrade(ctx, *result)
@@ -237,7 +257,7 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	}
 }
 
-func findPrecision(v string) uint8 {
+func findNumberOfDecimal(v string) uint8 {
 	data := strings.Split(v, ".")
 	if len(data) == 2 {
 		var result uint8 = 0
@@ -255,7 +275,7 @@ func findPrecision(v string) uint8 {
 
 // RoundToDecimalPoint take an amount then rounds it to the upper 2 decimal point if the value is more than 2 decimal point.
 func RoundToDecimalPoint(amount float64, precision uint8) float64 {
-	amountString := fmt.Sprintf("%v", amount)
+	amountString := fmt.Sprintf("%.8f", amount)
 
 	amountSplit := strings.Split(amountString, ".")
 
@@ -270,7 +290,7 @@ func RoundToDecimalPoint(amount float64, precision uint8) float64 {
 	valueAmount := fmt.Sprintf("%s%s", amountSplit[0], amountSplit[1][:int(precision)])
 	result, _ := strconv.ParseInt(valueAmount, 10, 64)
 
-	return float64(result+1) / math.Pow(float64(10), float64(precision))
+	return float64(result) / math.Pow(float64(10), float64(precision))
 }
 
 func (s *system) tradeClosed(pair Pair) {
