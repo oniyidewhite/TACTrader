@@ -207,15 +207,18 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	// // 82, 93 || 27
 	rsi, ok := c.OtherData["RSI"]
 	if !ok {
-		logger.Info(ctx, "no rsi value", zap.Any("d", result))
 		return
 	}
+
+	if time.Now().UTC().Before(settings.StartTime) {
+		return
+	}
+
 	if rsi > 81 {
 		result.TradeType = TradeTypeShort
 	} else if rsi < 23 {
 		result.TradeType = TradeTypeLong
 	} else {
-		logger.Info(ctx, "skipping", zap.Any("d", result))
 		return
 	}
 

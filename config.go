@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
+
+var StartTime time.Time
 
 type Config struct {
 	BinanceApiKey     string
