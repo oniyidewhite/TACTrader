@@ -8,6 +8,8 @@ import (
 	"github.com/oblessing/artisgo/store"
 )
 
+const maxSize = 10
+
 type tmpStorageData struct {
 	data *store.BotData
 	prev *tmpStorageData
@@ -47,6 +49,7 @@ func (m *tmpStorage) save(pair string, record tmpStorageData) error {
 	return nil
 }
 
+// Fetch returns the requested size, note, fetch is self resizing since we don't have a way yet to keep overall data size in check
 func (m *tmpStorage) Fetch(ctx context.Context, pair string, size int) ([]*store.BotData, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -80,7 +83,12 @@ func (m *tmpStorage) Fetch(ctx context.Context, pair string, size int) ([]*store
 		count += 1
 	}
 
-	return result, nil
+	final := []*store.BotData{}
+	for i := len(result) - 1; i >= 0; i = i - 1 {
+		final = append(final, result[i])
+	}
+
+	return final, nil
 }
 
 func (m *tmpStorage) Save(ctx context.Context, candle *store.BotData) error {
@@ -102,6 +110,6 @@ func (m *tmpStorage) cleanup() {
 	m.store = map[string]tmpStorageData{}
 }
 
-//Save(context.Context, *BotData) error
-//// Fetch retrieves record from database
-//Fetch(context.Context, string, int) ([]*BotData, error)
+// Save(context.Context, *BotData) error
+// // Fetch retrieves record from database
+// Fetch(context.Context, string, int) ([]*BotData, error)

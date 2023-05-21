@@ -27,11 +27,9 @@ func GetRuntimeConfig() (Config, error) {
 	if len(data) < 5 {
 		// TODO: After testing, we should always return an error.
 		return Config{
-			BinanceApiKey:     "9xGvtPO4gk0WAlbQqv4D1kZvSTCsqDpGNDNt44LrWtB78YWfJjkAHXCwBh8Tm39x",
-			BinanceSecretKey:  "xybN1tX5OTF0YgUlIRtCKeWNWpAkr0hjRMUGa89b54RYeb8MkiU5PFD6cI0G1u4s",
-			Interval:          "3m", //"1m",
-			PercentageLotSize: 20,   //369,
-			TradeAmount:       3,
+			Interval:          "5m", // "1m",
+			PercentageLotSize: 20,   // 369,
+			TradeAmount:       100,
 			TestType:          "real",
 			IsBypass:          false,
 		}, nil
@@ -63,11 +61,11 @@ func GetRuntimeConfig() (Config, error) {
 	}, nil
 }
 
-//var (
+// var (
 //	Interval          = "3m"    // "1m" //"5m"  //"1h"//"15m"//"30m"//"15m"
 //	PercentageLotSize = 0.14285 //0.011//0.111 //0.811 //0.611//0.369 //1.1 //0.61 // means 1.2% // should be dynamic // 0.14285 or (3.14285), 1.04761
 //	TradeAmount       = 100.0   // 10$
-//)
+// )
 
 // 3m // 0.13258
 // 3m 0.14285

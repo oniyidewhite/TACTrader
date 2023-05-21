@@ -52,17 +52,19 @@ func (c *Candle) IsUp() bool {
 
 // TradeParams for initiating a trade
 type TradeParams struct {
-	TradeType      TradeType          `json:"trade_type"`
-	OpenTradeAt    string             `json:"open_trade_at"`
-	OrderID        string             `json:"order_id"`
-	TakeProfitAt   string             `json:"take_profit_at"`
-	StopLossAt     string             `json:"stop_loss_at"`
-	TradeSize      string             `json:"trade_size"`
-	Rating         int                `json:"rating"` // Deprecated
-	Pair           Pair               `json:"pair"`
-	CreatedAt      time.Time          `json:"time"`
-	Attribs        map[string]float64 `json:"others"`
-	CanNotOverride bool               `json:"canNotOverride"`
+	TradeType         TradeType          `json:"trade_type"`
+	OriginalTradeType TradeType          `json:"original_trade_type"`
+	OpenTradeAt       string             `json:"open_trade_at"`
+	Volume            float64            `json:"volume"`
+	OrderID           string             `json:"order_id"`
+	TakeProfitAt      string             `json:"take_profit_at"`
+	StopLossAt        string             `json:"stop_loss_at"`
+	TradeSize         string             `json:"trade_size"`
+	Rating            int                `json:"rating"` // Deprecated
+	Pair              Pair               `json:"pair"`
+	CreatedAt         time.Time          `json:"time"`
+	Attribs           map[string]float64 `json:"others"`
+	CanNotOverride    bool               `json:"canNotOverride"`
 }
 
 func (t TradeParams) OpenTradeAtV() float64 {
@@ -137,12 +139,12 @@ func NewExpertTrader(config settings.Config, storage store.Database, service Ord
 }
 
 func (s *system) Record(ctx context.Context, c *Candle, transform Transform, config RecordConfig) {
-	//Try checking if we need to close any trade,
-	//do not use heikin ashi to close trade.
+	// Try checking if we need to close any trade,
+	// do not use heikin ashi to close trade.
 	s.tryClosing(ctx, c)
 
 	// Check if the time is still running,
-	//return, so we do not persist it.
+	// return, so we do not persist it.
 	if !c.Closed {
 		return
 	}
@@ -151,7 +153,7 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 	candles, _ := s.datasource.FetchCandles(ctx, c.Pair, config.CandleSize)
 	var previousCandle = c
 	if len(candles) != 0 {
-		previousCandle = candles[0]
+		previousCandle = candles[len(candles)-1]
 	}
 	candle := convertToHeikinAshi(previousCandle, c)
 
@@ -170,23 +172,11 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 		return
 	}
 
-	// Check if we have open trade.
-	// TODO: support opening of multiple positions.
-	if _, ok := read(candle.Pair); ok {
+	if len(candles) < 2 {
 		return
 	}
 
-	dataset, err := s.datasource.FetchCandles(ctx, candle.Pair, config.CandleSize)
-	if err != nil {
-		logger.Error(ctx, "error fetching records", zap.Error(err))
-		return
-	}
-
-	if len(dataset) < 2 {
-		return
-	}
-
-	s.processTrade(ctx, *c, transform, config, dataset)
+	s.processTrade(ctx, *c, transform, config, candles)
 }
 
 func (s *system) processTrade(ctx context.Context, c Candle, transform Transform, config RecordConfig, dataset []*Candle) {
@@ -210,15 +200,31 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		return
 	}
 
-	if time.Now().UTC().Before(settings.StartTime) {
-		return
-	}
+	// t := time.Now().UTC()
+	// if t.Weekday() == time.Monday ||
+	// 	t.UTC().Weekday() == time.Friday ||
+	// 	t.UTC().Weekday() == time.Saturday ||
+	// 	t.UTC().Weekday() == time.Sunday {
+	// 	return
+	// }
+	// // US market							// HongKong/beijing market
+	// if !(t.Hour() >= 13 && t.Hour() <= 20) || !(t.Hour() >= 4 && t.Hour() <= 11) {
+	// 	return
+	// }
+	//
+	// if t.Before(settings.StartTime) {
+	// 	return
+	// }
 
-	if rsi > 81 {
+	result.OriginalTradeType = result.TradeType
+	result.Attribs = c.OtherData
+
+	if rsi > 81 && result.TradeType == TradeTypeShort {
 		result.TradeType = TradeTypeShort
-	} else if rsi < 23 {
+	} else if rsi < 23 && result.TradeType == TradeTypeLong {
 		result.TradeType = TradeTypeLong
 	} else {
+		logger.Info(ctx, "did not take", zap.Any("ignored", result))
 		return
 	}
 
@@ -231,10 +237,6 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
-		//if rsi > 15 {
-		//	logger.Info(ctx, "rsi is larger than 15")
-		//	return
-		//}
 	case TradeTypeShort:
 		stopLoss := result.OpenTradeAtV() + ((result.OpenTradeAtV()) / config.LotSize)
 		// since leverage is 10 times
@@ -243,21 +245,34 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
-		//if rsi > 85 {
-		//	logger.Info(ctx, "rsi is less than 70")
-		//	return
-		//}
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
 	// Set additional attribs for logging
 	result.Attribs = c.OtherData
 	result.OpenTradeAt = buyPrice
+	result.Volume = c.Volume
+
+	// TODO(oblessing): don't allow close at the same price, throw error so moderator can close it.
+	if result.TakeProfitAt == result.OpenTradeAt || result.StopLossAt == result.OpenTradeAt {
+		m := "same open + stop"
+		if result.TakeProfitAt == result.OpenTradeAt {
+			m = "same open + profit"
+		}
+		logger.Error(ctx, "trade mismatch", zap.String("mismatch", m), zap.Any("t", result))
+		return
+	}
 
 	if result != nil {
+		// Check if we have open trade.
+		// TODO: support opening of multiple positions.
+		if _, ok := read(result.Pair); ok {
+			logger.Error(ctx, "already have an open trade", zap.Any("ignored", result))
+			return
+		}
+
 		trd, err := s.orderService.PlaceTrade(ctx, *result)
 		if err != nil {
-			logger.Error(ctx, "ea_trader: unable to place trade", zap.Error(err), zap.Any("d", result))
 			return
 		}
 
@@ -366,7 +381,7 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 	}
 
 	if err != nil {
-		logger.Error(ctx, "ea_trader: error occurred while attempting to close trade", zap.Error(err))
+		logger.Error(ctx, "ea_trader: error occurred while attempting to close trade", zap.Error(err), zap.Any("p", params))
 		return
 	}
 

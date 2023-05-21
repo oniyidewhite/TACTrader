@@ -26,7 +26,7 @@ type Service interface {
 
 type CryptoPair struct {
 	Symbol string `json:"symbol"`
-	//IsMarginTradingAllowed bool   `json:"isMarginTradingAllowed"`
+	// IsMarginTradingAllowed bool   `json:"isMarginTradingAllowed"`
 	QuotePrecision int `json:"quotePrecision"`
 	Filters        []struct {
 		FilterType string `json:"filterType"`
@@ -159,7 +159,7 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	var result = []strategy.PairConfig{}
 
 	// TODO: find a better way to pass in the strategy
-	algo := strategy.NewReversalScrapingStrategy() // .NewWolfieStrategy(true) //
+	algo := strategy.NewReversalScrapingStrategyV2() // .NewWolfieStrategy(true) //
 
 	for _, pair := range list {
 		if a.isUSDT(pair.Symbol) /* pair.Symbol == "BTCUSDT" || pair.Symbol == "ETHUSDT"  && pair.IsMarginTradingAllowed */ {
@@ -168,12 +168,13 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 			precision := pair.QuotePrecision
 
 			result = append(result, strategy.PairConfig{
-				AdditionalData:  []string{minPrice, stepSize, fmt.Sprintf("%v", precision)},
+				AdditionalData: []string{minPrice,
+					stepSize, fmt.Sprintf("%v", precision)},
 				Pair:            pair.Symbol,
 				Period:          a.config.Interval,
 				Strategy:        algo.TransformAndPredict,
 				LotSize:         a.lotSize(),
-				RatioToOne:      2,
+				RatioToOne:      .041, // .021, // .15, // .19 // 0.5, //.33 // 1
 				CandleSize:      15,
 				DefaultAnalysis: strategy.GetDefaultAnalysis(),
 			})

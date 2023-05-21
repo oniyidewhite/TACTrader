@@ -30,7 +30,7 @@ func init() {
 func main() {
 	ctx := context.Background()
 
-	settings.StartTime = time.Now().UTC().Add(4 * time.Hour)
+	settings.StartTime = time.Now().UTC().Add(1 * time.Hour)
 
 	// Let the system take advantage of all cores.
 	runtime.GOMAXPROCS(runtime.NumCPU())

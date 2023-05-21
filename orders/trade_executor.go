@@ -29,7 +29,7 @@ type OrderService interface {
 }
 
 func NewAdapter(config settings.Config) *binanceAdapter {
-	//binance.UseTestnet = config.IsTestMode()
+	// binance.UseTestnet = config.IsTestMode()
 	return &binanceAdapter{
 		client:     binance.NewFuturesClient(config.BinanceApiKey, config.BinanceSecretKey),
 		isTestMode: config.IsTestMode(),
@@ -53,7 +53,7 @@ func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...strat
 			if err != nil {
 				// Do not log unsupported pairs [just silently ignore]
 				logger.Error(ctx, "skipping: enableIsolatedTrading", zap.Any("symbol", p.Pair), zap.Error(err))
-				//return err
+				// return err
 			}
 			err = b.setLeverage(ctx, expert.Pair(p.Pair))
 			if err != nil {
@@ -87,6 +87,8 @@ func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradePara
 		zap.Any("tp", params.TakeProfitAt),
 		zap.Any("sl", params.StopLossAt),
 		zap.Any("tz", params.TradeSize),
+		zap.Any("v", params.Volume),
+		zap.Any("org", params.OriginalTradeType),
 		zap.Any("atr", params.Attribs))
 
 	if params.OpenTradeAt == params.TakeProfitAt {
@@ -137,17 +139,18 @@ func (b *binanceAdapter) CloseTrade(ctx context.Context, params expert.SellParam
 		side = futures.SideTypeBuy
 	}
 
-	res, err := b.client.NewCreateOrderService().Symbol(string(params.Pair)).Side(side).Quantity(params.TradeSize).Type(futures.OrderTypeMarket).Do(ctx) //.NewCancelOrderService().Symbol(string(params.Pair)).OrderID(orderID).Do(ctx)
+	res, err := b.client.NewCreateOrderService().Symbol(string(params.Pair)).Side(side).Quantity(params.TradeSize).Type(futures.OrderTypeMarket).Do(ctx) // .NewCancelOrderService().Symbol(string(params.Pair)).OrderID(orderID).Do(ctx)
 	if err != nil {
 		if params.IsStopLoss {
 			// The trade already close, trust me. lol 🌚
+			logger.Info(ctx, "order: stop loss triggered", zap.Any("params", params))
 			return true, nil
 		}
 
 		return false, err
 	}
 
-	logger.Info(ctx, "order: close trade", zap.Any("response", res))
+	logger.Info(ctx, "order: closed trade", zap.Any("response", res))
 
 	return true, nil
 }
@@ -170,11 +173,11 @@ func (b *binanceAdapter) placeLong(ctx context.Context, params expert.TradeParam
 		PositionSide(futures.PositionSideTypeBoth).
 		Side(futures.SideTypeBuy).
 		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
-		//StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
+		// StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeBuy).
 		Type(futures.OrderTypeLimit).
-		//Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
+		// Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
 		TimeInForce(futures.TimeInForceTypeFOK).
 		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
 		Do(ctx)
@@ -200,11 +203,11 @@ func (b *binanceAdapter) placeShort(ctx context.Context, params expert.TradePara
 		PositionSide(futures.PositionSideTypeBoth).
 		Side(futures.SideTypeSell).
 		Price(fmt.Sprintf("%s", params.OpenTradeAt)).
-		//StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
+		// StopPrice(fmt.Sprintf("%s", params.TakeProfitAt)).
 		Quantity(params.TradeSize).
 		Side(futures.SideTypeSell).
 		Type(futures.OrderTypeLimit).
-		//Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
+		// Type(futures.OrderTypeTakeProfit). //OrderTypeStopMarket, ClosePosition(true).
 		TimeInForce(futures.TimeInForceTypeFOK).
 		NewOrderResponseType(futures.NewOrderRespTypeRESULT).
 		Do(ctx)
