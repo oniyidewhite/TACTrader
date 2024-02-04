@@ -152,6 +152,11 @@ func (a finderAdapter) isUSDT(input string) bool {
 		return false
 	}
 
+	// We want to trade only btc
+	if !strings.EqualFold(strings.ReplaceAll(input, "USDT", ""), "BTC") {
+		return false
+	}
+
 	return check == "USDT"
 }
 
@@ -159,10 +164,10 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	var result = []strategy.PairConfig{}
 
 	// TODO: find a better way to pass in the strategy
-	algo := strategy.NewReversalScrapingStrategyV2() // .NewWolfieStrategy(true) //
+	algo := strategy.NewOrderBlockWithRetracement(a.config.BlockSize) // .NewJustRandom("buy") // .NewOrderBlockWithRetracement(a.config.BlockSize) // NewDivergentReversalWithRenko() // .NewWolfieStrategy(true) //
 
 	for _, pair := range list {
-		if a.isUSDT(pair.Symbol) /* pair.Symbol == "BTCUSDT" || pair.Symbol == "ETHUSDT"  && pair.IsMarginTradingAllowed */ {
+		if a.isUSDT(pair.Symbol) {
 			minPrice := findValueForKey("PRICE_FILTER", pair)
 			stepSize := findValueForKey("LOT_SIZE", pair)
 			precision := pair.QuotePrecision
@@ -174,8 +179,8 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 				Period:          a.config.Interval,
 				Strategy:        algo.TransformAndPredict,
 				LotSize:         a.lotSize(),
-				RatioToOne:      .041, // .021, // .15, // .19 // 0.5, //.33 // 1
-				CandleSize:      15,
+				RatioToOne:      a.config.RatioToOne,
+				CandleSize:      a.config.BlockSize,
 				DefaultAnalysis: strategy.GetDefaultAnalysis(),
 			})
 		}

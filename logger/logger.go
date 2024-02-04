@@ -41,6 +41,17 @@ func Error(ctx context.Context, msg string, fields ...zap.Field) {
 	logger.Error(msg, storedFields...)
 }
 
+func Warn(ctx context.Context, msg string, fields ...zap.Field) {
+	data := ctx.Value(loggerfields)
+	var storedFields = []zap.Field{}
+	if data != nil {
+		storedFields = data.([]zap.Field)
+	}
+	storedFields = append(storedFields, fields...)
+
+	logger.Warn(msg, storedFields...)
+}
+
 func Info(ctx context.Context, msg string, fields ...zap.Field) {
 	data := ctx.Value(loggerfields)
 

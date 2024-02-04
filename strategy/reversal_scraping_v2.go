@@ -16,9 +16,11 @@ type reversalScrapingStrategyV2 struct {
 	tradeInfo sync.Map
 }
 
+var Store = sync.Map{}
+
 func NewReversalScrapingStrategyV2() *reversalScrapingStrategyV2 {
 	return &reversalScrapingStrategyV2{
-		tradeInfo: sync.Map{},
+		tradeInfo: Store,
 	}
 }
 
@@ -33,7 +35,7 @@ func (s *reversalScrapingStrategyV2) TransformAndPredict(ctx context.Context, tr
 	// check if we can buy
 	rr := s.getTradeInfo(trigger.Pair)
 	if s.isTradable(rr) {
-		if rr.ReadyToBuy && rr.HighPoint != MIN && s.withinHSpread(ctx, rr, trigger) {
+		if rr.ReadyToBuy && rr.HighPoint != MIN && s.withinHSpread(ctx, rr, trigger) { // // review this
 			// Reset data
 			rr.ReadyToBuy = false
 			rr.HighPoint = MIN
@@ -47,7 +49,7 @@ func (s *reversalScrapingStrategyV2) TransformAndPredict(ctx context.Context, tr
 			}
 		}
 		// check if ready to short (use spread)
-		if rr.ReadyToShort && rr.LowPoint != MAX && s.withinLSpread(ctx, rr, trigger) {
+		if rr.ReadyToShort && rr.LowPoint != MAX && s.withinLSpread(ctx, rr, trigger) { // // review this
 			// Reset data
 			rr.ReadyToShort = false
 			rr.LowPoint = MAX
@@ -86,11 +88,12 @@ func (s *reversalScrapingStrategyV2) TransformAndPredict(ctx context.Context, tr
 		rr.ReadyToShort = false
 		s.write(trigger.Pair, rr)
 	default:
-		if rr.HighPoint > trigger.Close {
+		// main & constraint
+		if rr.HighPoint > trigger.Close && (trigger.Close > rr.LowPoint) {
 			rr.ReadyToBuy = true
 		}
 
-		if rr.LowPoint < trigger.Close {
+		if rr.LowPoint < trigger.Close && (trigger.Close < rr.HighPoint) {
 			rr.ReadyToShort = true
 		}
 
@@ -121,11 +124,11 @@ func (s *reversalScrapingStrategyV2) evaluateMarketTrend(candles []*expert.Candl
 }
 
 func (s *reversalScrapingStrategyV2) withinHSpread(ctx context.Context, r RSTradeInfo, c expert.Candle) bool {
-	return c.Close >= r.HighPoint
+	return c.Close > r.HighPoint
 }
 
 func (s *reversalScrapingStrategyV2) withinLSpread(ctx context.Context, r RSTradeInfo, c expert.Candle) bool {
-	return c.Close <= r.LowPoint
+	return c.Close < r.LowPoint
 }
 
 func (s *reversalScrapingStrategyV2) isTradable(info RSTradeInfo) bool {
@@ -163,7 +166,7 @@ func (s *reversalScrapingStrategyV2) findLowest(candles []expert.Candle) (float6
 		return 0, errors.New("no data to evaluate")
 	}
 
-	var lowest = candles[0]
+	var lowest = candles[len(candles)-2]
 	for i := len(candles) - 2; i < len(candles); i++ {
 		c := candles[i]
 		if c.Close < lowest.Close {

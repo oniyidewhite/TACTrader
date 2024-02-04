@@ -7,13 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	settings "github.com/oblessing/artisgo"
 	"github.com/oblessing/artisgo/strategy"
 
 	"github.com/oblessing/artisgo/expert"
 	"github.com/oblessing/artisgo/logger"
+	"go.uber.org/zap"
 )
 
 // myBinance represent My Binance API configuration
@@ -55,10 +54,11 @@ func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConf
 			// We restart if we encounter an error.
 			var hasStarted = false
 			for {
-				logger.Info(ctx, "starting watcher", zap.String("pair", p.Pair), zap.String("period", p.Period))
 				doneC, _, err := futures.WsKlineServe(p.Pair, p.Period, wsKlineHandler, errHandler)
 				if err != nil {
-					logger.Error(ctx, "start_trading: an error occurred, will resume after 30s", zap.Error(err))
+					// reset this pair store
+					strategy.Store.Delete(p.Pair)
+
 					<-time.After(30 * time.Second)
 					continue
 				}

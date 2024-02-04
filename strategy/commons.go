@@ -71,10 +71,38 @@ var RSI = func(candles []*expert.Candle) float64 {
 	return rsi
 }
 
-var MA = func(candles []*expert.Candle) float64 {
+var MA200 = func(candles []*expert.Candle) float64 {
+	size := 200
+	if len(candles) < size {
+		return 0
+	}
+
 	var sum float64 = 0
 	for _, i := range candles {
 		sum += i.Close
+	}
+
+	return sum / float64(size)
+}
+
+var MA50 = func(candles []*expert.Candle) float64 {
+	size := 50
+	if len(candles) < size {
+		return 0
+	}
+
+	var sum float64 = 0
+	for i := 1; i <= size; i++ {
+		sum += candles[len(candles)-i].Close
+	}
+
+	return sum / float64(size)
+}
+
+var MA = func(candles []*expert.Candle) float64 {
+	var sum float64 = 0
+	for _, v := range candles {
+		sum += v.Close
 	}
 
 	return sum / float64(len(candles))
@@ -87,6 +115,34 @@ var VMA = func(candles []*expert.Candle) float64 {
 	}
 
 	return sum / float64(len(candles))
+}
+
+var ATR = func(candles []*expert.Candle) float64 {
+	var sum float64 = 0
+	for _, i := range candles {
+		c, ok := i.OtherData["TR"]
+		if ok {
+			sum += c
+		} else {
+			return 0
+		}
+	}
+
+	return sum / float64(len(candles))
+}
+
+var TR = func(candles []*expert.Candle) float64 {
+	if len(candles) < 2 {
+		return 0
+	}
+	prv := candles[len(candles)-2]
+	lst := candles[len(candles)-1]
+
+	return math.Max(lst.High-lst.Low, math.Max(math.Abs(lst.High-prv.Close), math.Abs(lst.Low-prv.Close)))
+}
+
+var LASTCLOSE = func(candles []*expert.Candle) float64 {
+	return candles[len(candles)-1].Close
 }
 
 func isGreen(candle expert.Candle) bool {
@@ -126,8 +182,16 @@ func GetDefaultAnalysis() []*expert.CalculateAction {
 			Action: RSI,
 		},
 		{
+			Name:   "TR",
+			Action: TR,
+		},
+		{
 			Name:   "VMA",
 			Action: VMA,
+		},
+		{
+			Name:   "ATR",
+			Action: ATR,
 		},
 	}
 }

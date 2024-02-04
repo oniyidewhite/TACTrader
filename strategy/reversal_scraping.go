@@ -19,13 +19,17 @@ type RSTradeInfo struct {
 	ReadyToShort bool
 }
 
+func (i RSTradeInfo) IsTradeAble() bool {
+	return (i.ReadyToShort && i.HighPoint != MIN) || (i.ReadyToBuy && i.LowPoint != MIN)
+}
+
 type reversalScrapingStrategy struct {
 	tradeInfo sync.Map
 }
 
 func NewReversalScrapingStrategy() *reversalScrapingStrategy {
 	return &reversalScrapingStrategy{
-		tradeInfo: sync.Map{},
+		tradeInfo: Store,
 	}
 }
 
@@ -48,7 +52,7 @@ func (s *reversalScrapingStrategy) TransformAndPredict(ctx context.Context, trig
 	// check if we can buy
 	rr := s.getTradeInfo(candle.Pair)
 	if !s.isNotTradeable(rr) {
-		//logger.Info(ctx, "is trade-able",
+		// logger.Info(ctx, "is trade-able",
 		//	zap.Any("xx", rr),
 		//	zap.Int("trend", trend),
 		//	zap.Any("##", candle),

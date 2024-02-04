@@ -37,6 +37,10 @@ func TestNewMemoryStore(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, float64(1), res[0].Others["t"])
 
+		res, err = store.Fetch(ctx, "Test1", 10)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(4), res[len(res)-1].Others["t"])
+
 		res, err = store.Fetch(ctx, "Test1", 2)
 		assert.NoError(t, err)
 		assert.Equal(t, float64(3), res[0].Others["t"])

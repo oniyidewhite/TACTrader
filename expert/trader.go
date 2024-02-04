@@ -3,7 +3,6 @@ package expert
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +23,7 @@ const (
 var (
 	// TODO: Add support for placing multiple trades for a specific symbol
 	activeTrades = sync.Map{} // map[Pair]*TradeParams{}
+	pendingTrade = sync.Map{} // map[Pair]*TradeParams{}
 )
 
 type TradeType string
@@ -65,6 +65,7 @@ type TradeParams struct {
 	CreatedAt         time.Time          `json:"time"`
 	Attribs           map[string]float64 `json:"others"`
 	CanNotOverride    bool               `json:"canNotOverride"`
+	AutomaticClose    bool               `json:"automaticClose"`
 }
 
 func (t TradeParams) OpenTradeAtV() float64 {
@@ -139,8 +140,8 @@ func NewExpertTrader(config settings.Config, storage store.Database, service Ord
 }
 
 func (s *system) Record(ctx context.Context, c *Candle, transform Transform, config RecordConfig) {
-	// Try checking if we need to close any trade,
-	// do not use heikin ashi to close trade.
+	// // Try checking if we need to close any trade,
+	// // do not use heikin ashi to close trade.
 	s.tryClosing(ctx, c)
 
 	// Check if the time is still running,
@@ -159,11 +160,15 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 
 	// apply actions; MA, RSI, etc
 	for _, action := range config.DefaultAnalysis {
-		if len(candles) != config.CandleSize {
-			break
+		if action.Name == "LASTCLOSE" {
+			candle.OtherData[action.Name] = action.Action(append([]*Candle{c}))
+
+			continue
 		}
 
-		candle.OtherData[action.Name] = action.Action(append([]*Candle{candle}, candles...))
+		d := append([]*Candle{}, candles...)
+		d = append(d, candle)
+		candle.OtherData[action.Name] = action.Action(d)
 	}
 
 	// persist the new candle
@@ -183,49 +188,28 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	lotPrecision := findNumberOfDecimal(config.AdditionalData[1])
 	quotePrecision := findNumberOfDecimal(config.AdditionalData[0])
 
+	if len(dataset) == 1 {
+		return
+	}
+
 	result := transform(ctx, c, dataset)
 	// Check if we can act on the data
 	if result == nil {
 		return
 	}
 
+	// lets try delayed data
+	prevCandleAnalysis := dataset[len(dataset)-1].OtherData
+
 	// trading amount is
 	var tradeSize = ((1 / result.OpenTradeAtV()) * s.settings.TradeAmount) * config.LotSize
 	var buyPrice = fmt.Sprintf("%v", RoundToDecimalPoint(result.OpenTradeAtV(), quotePrecision))
 
-	// use RSI to deduce the direction, extreme high(short) extreme low(long)
-	// // 82, 93 || 27
-	rsi, ok := c.OtherData["RSI"]
-	if !ok {
-		return
-	}
+	tr, _ := prevCandleAnalysis["TR"]
+	atr, _ := prevCandleAnalysis["ATR"]
 
-	// t := time.Now().UTC()
-	// if t.Weekday() == time.Monday ||
-	// 	t.UTC().Weekday() == time.Friday ||
-	// 	t.UTC().Weekday() == time.Saturday ||
-	// 	t.UTC().Weekday() == time.Sunday {
-	// 	return
-	// }
-	// // US market							// HongKong/beijing market
-	// if !(t.Hour() >= 13 && t.Hour() <= 20) || !(t.Hour() >= 4 && t.Hour() <= 11) {
-	// 	return
-	// }
-	//
-	// if t.Before(settings.StartTime) {
-	// 	return
-	// }
-
-	result.OriginalTradeType = result.TradeType
-	result.Attribs = c.OtherData
-
-	if rsi > 81 && result.TradeType == TradeTypeShort {
-		result.TradeType = TradeTypeShort
-	} else if rsi < 23 && result.TradeType == TradeTypeLong {
-		result.TradeType = TradeTypeLong
-	} else {
-		logger.Info(ctx, "did not take", zap.Any("ignored", result))
-		return
+	if tr < (atr * 1.3) {
+		logger.Warn(ctx, "atr is less than 1.3x", zap.Any("tr", tr), zap.Any("atr", atr))
 	}
 
 	switch result.TradeType {
@@ -248,31 +232,48 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
-	// Set additional attribs for logging
-	result.Attribs = c.OtherData
+	// Set additional attribs for logging //  digit rsi -> short -> down stops at (6), 83 + xtreme
+	result.Attribs = prevCandleAnalysis
 	result.OpenTradeAt = buyPrice
 	result.Volume = c.Volume
 
-	// TODO(oblessing): don't allow close at the same price, throw error so moderator can close it.
-	if result.TakeProfitAt == result.OpenTradeAt || result.StopLossAt == result.OpenTradeAt {
-		m := "same open + stop"
-		if result.TakeProfitAt == result.OpenTradeAt {
-			m = "same open + profit"
-		}
-		logger.Error(ctx, "trade mismatch", zap.String("mismatch", m), zap.Any("t", result))
-		return
-	}
+	s.placeTrade(ctx, result)
+}
 
+func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
 	if result != nil {
-		// Check if we have open trade.
-		// TODO: support opening of multiple positions.
-		if _, ok := read(result.Pair); ok {
-			logger.Error(ctx, "already have an open trade", zap.Any("ignored", result))
+		// TODO(oblessing): don't allow close at the same price, throw error so moderator can close it.
+		if result.TakeProfitAt == result.OpenTradeAt || result.StopLossAt == result.OpenTradeAt {
+			m := "same open + stop"
+			if result.TakeProfitAt == result.OpenTradeAt {
+				m = "same open + profit"
+			}
+			logger.Error(ctx, "trade mismatch", zap.String("mismatch", m), zap.Any("t", result))
+
 			return
 		}
 
+		// Check if we have open trade.
+		// TODO: support opening of multiple positions.
+		if _, ok := read(result.Pair); ok {
+			// logger.Warn(ctx, "already have an open trade", zap.Any("ignored", result))
+
+			return
+		}
+
+		// check if we have a pending order
+		if ok := readPending(result.Pair); ok {
+			logger.Error(ctx, "already have an pending open trade", zap.Any("ignored", result))
+
+			return
+		}
+		writePending(result.Pair)
+		defer removePending(result.Pair)
+
 		trd, err := s.orderService.PlaceTrade(ctx, *result)
 		if err != nil {
+			logger.Warn(ctx, "prnding place order", zap.Any("ignored", result), zap.Error(err))
+
 			return
 		}
 
@@ -300,22 +301,11 @@ func findNumberOfDecimal(v string) uint8 {
 
 // RoundToDecimalPoint take an amount then rounds it to the upper 2 decimal point if the value is more than 2 decimal point.
 func RoundToDecimalPoint(amount float64, precision uint8) float64 {
-	amountString := fmt.Sprintf("%.8f", amount)
+	str := "%." + fmt.Sprintf("%v", precision) + "f"
+	amountString := fmt.Sprintf(str, amount)
 
-	amountSplit := strings.Split(amountString, ".")
-
-	if len(amountSplit) != 2 {
-		return amount
-	}
-
-	if len(amountSplit[1]) <= int(precision) {
-		return amount
-	}
-
-	valueAmount := fmt.Sprintf("%s%s", amountSplit[0], amountSplit[1][:int(precision)])
-	result, _ := strconv.ParseInt(valueAmount, 10, 64)
-
-	return float64(result) / math.Pow(float64(10), float64(precision))
+	res, _ := strconv.ParseFloat(amountString, 64)
+	return res
 }
 
 func (s *system) tradeClosed(pair Pair) {
@@ -336,6 +326,11 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 	switch params.TradeType {
 	case TradeTypeLong:
 		if candle.Close >= params.TakeProfitAtV() {
+			if params.AutomaticClose {
+				closedTrade = true
+				break
+			}
+
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  false,
 				SellTradeAt: candle.Close,
@@ -346,6 +341,11 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 				TradeType:   params.TradeType,
 			})
 		} else if candle.Close <= params.StopLossAtV() {
+			if params.AutomaticClose {
+				closedTrade = true
+				break
+			}
+
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  true,
 				SellTradeAt: candle.Close,
@@ -358,6 +358,11 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 		}
 	case TradeTypeShort:
 		if candle.Close <= params.TakeProfitAtV() {
+			if params.AutomaticClose {
+				closedTrade = true
+				break
+			}
+
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  false,
 				SellTradeAt: candle.Close,
@@ -368,6 +373,11 @@ func (s *system) tryClosing(ctx context.Context, candle *Candle) {
 				TradeType:   params.TradeType,
 			})
 		} else if candle.Close >= params.StopLossAtV() {
+			if params.AutomaticClose {
+				closedTrade = true
+				break
+			}
+
 			closedTrade, err = s.orderService.CloseTrade(ctx, SellParams{
 				IsStopLoss:  true,
 				SellTradeAt: candle.Close,
@@ -401,8 +411,8 @@ func convertToHeikinAshi(older *Candle, newer *Candle) *Candle {
 	// close
 	newClose := 0.25 * (newer.Open + newer.Close + newer.High + newer.Low)
 	newOpen := 0.5 * (older.Open + older.Close)
-	newLow := lowest([]float64{newer.Low, newOpen, newClose})
-	newHigh := highest([]float64{newer.High, newOpen, newClose})
+	newLow := lowest(newer.Low, newOpen, newClose)
+	newHigh := highest(newer.High, newOpen, newClose)
 
 	result := &Candle{
 		Pair:      newer.Pair,
@@ -411,7 +421,7 @@ func convertToHeikinAshi(older *Candle, newer *Candle) *Candle {
 		Open:      newOpen,
 		Close:     newClose,
 		Volume:    newer.Volume,
-		OtherData: newer.OtherData,
+		OtherData: map[string]float64{},
 		Time:      newer.Time,
 		Closed:    newer.Closed,
 	}
@@ -419,7 +429,7 @@ func convertToHeikinAshi(older *Candle, newer *Candle) *Candle {
 	return result
 }
 
-func lowest(arr []float64) float64 {
+func lowest(arr ...float64) float64 {
 	value := arr[0]
 	for _, v := range arr {
 		if v < value {
@@ -429,7 +439,7 @@ func lowest(arr []float64) float64 {
 	return value
 }
 
-func highest(arr []float64) float64 {
+func highest(arr ...float64) float64 {
 	value := arr[0]
 	for _, v := range arr {
 		if v > value {
@@ -454,4 +464,21 @@ func remove(key Pair) {
 
 func write(key Pair, data *TradeParams) {
 	activeTrades.Store(key, data)
+}
+
+func readPending(key Pair) bool {
+	_, ok := pendingTrade.Load(key)
+	if !ok {
+		return false
+	}
+
+	return ok
+}
+
+func removePending(key Pair) {
+	pendingTrade.Delete(key)
+}
+
+func writePending(key Pair) {
+	pendingTrade.Store(key, true)
 }

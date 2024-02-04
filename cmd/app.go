@@ -60,10 +60,7 @@ func main() {
 
 	lg.Info(ctx, "about to start monitor", zap.Int("count", len(supportedPairs)))
 
-	// Connect to datasource for symbols + pass in eaTrader
-	if time.Now().UTC().Unix() < 1687362658 {
-		if err = platform.NewSymbolDatasource(config, eaTrader).StartTrading(ctx, supportedPairs...); err != nil {
-			logger.Fatal(err)
-		}
+	if err = platform.NewSymbolDatasource(config, eaTrader).StartTrading(ctx, supportedPairs...); err != nil {
+		logger.Fatal(err)
 	}
 }
