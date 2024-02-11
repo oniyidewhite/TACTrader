@@ -51,6 +51,7 @@ func (s *orderBlockWithRetracement) TransformAndPredict(ctx context.Context, tri
 					OpenTradeAt: fmt.Sprintf("%v", trigger.Close),
 					Pair:        trigger.Pair,
 				}
+
 				res.ReadyToShort = false
 				res.HighPoint = MIN
 			}
@@ -105,7 +106,7 @@ func (s *orderBlockWithRetracement) findAndUpdateOrderBlock(key expert.Pair, can
 		result.HighPoint = orderBlock.High
 		result.ReadyToShort = true
 	} else {
-		result.LowPoint = orderBlock.Close
+		result.LowPoint = orderBlock.Low
 		result.ReadyToBuy = true
 	}
 

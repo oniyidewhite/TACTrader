@@ -29,10 +29,8 @@ func GetRuntimeConfig() (Config, error) {
 	if len(data) < 5 {
 		// TODO: After testing, we should always return an error.
 		return Config{
-			BinanceApiKey:     "",
-			BinanceSecretKey:  "",
-			Interval:          "1m",
-			PercentageLotSize: 14,
+			Interval:          "1m", // "1m",
+			PercentageLotSize: 14,   // 369,
 			RatioToOne:        0.1,
 			BlockSize:         10,
 			TradeAmount:       40,

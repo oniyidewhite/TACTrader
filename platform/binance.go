@@ -56,9 +56,6 @@ func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConf
 			for {
 				doneC, _, err := futures.WsKlineServe(p.Pair, p.Period, wsKlineHandler, errHandler)
 				if err != nil {
-					// reset this pair store
-					strategy.Store.Delete(p.Pair)
-
 					<-time.After(30 * time.Second)
 					continue
 				}

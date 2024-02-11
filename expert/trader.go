@@ -208,10 +208,6 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	tr, _ := prevCandleAnalysis["TR"]
 	atr, _ := prevCandleAnalysis["ATR"]
 
-	if tr < (atr * 1.3) {
-		logger.Warn(ctx, "atr is less than 1.3x", zap.Any("tr", tr), zap.Any("atr", atr))
-	}
-
 	switch result.TradeType {
 	case TradeTypeLong:
 		stopLoss := result.OpenTradeAtV() - ((result.OpenTradeAtV()) / config.LotSize)
@@ -236,6 +232,14 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	result.Attribs = prevCandleAnalysis
 	result.OpenTradeAt = buyPrice
 	result.Volume = c.Volume
+
+	if tr < (atr * 1.3) {
+		// we should enforce this.
+		logger.Warn(ctx, "atr is less than 1.3x", zap.Any("result", result))
+
+		// we need momentum
+		return
+	}
 
 	s.placeTrade(ctx, result)
 }
@@ -270,16 +274,24 @@ func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
 		writePending(result.Pair)
 		defer removePending(result.Pair)
 
-		trd, err := s.orderService.PlaceTrade(ctx, *result)
-		if err != nil {
-			logger.Warn(ctx, "prnding place order", zap.Any("ignored", result), zap.Error(err))
+		count := 1
 
-			return
+		// open trade, retry 3 times before closing
+		for count <= 3 {
+			trd, err := s.orderService.PlaceTrade(ctx, *result)
+			if err != nil {
+				logger.Warn(ctx, "prnding place order", zap.Any("ignored", result), zap.Error(err))
+
+				count += 1
+				continue
+			}
+
+			result.OrderID = trd.OrderID
+
+			write(result.Pair, result)
+
+			break
 		}
-
-		result.OrderID = trd.OrderID
-
-		write(result.Pair, result)
 	}
 }
 
