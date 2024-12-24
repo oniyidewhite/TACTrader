@@ -23,7 +23,6 @@ const (
 var (
 	// TODO: Add support for placing multiple trades for a specific symbol
 	activeTrades = sync.Map{} // map[Pair]*TradeParams{}
-	pendingTrade = sync.Map{} // map[Pair]*TradeParams{}
 )
 
 type TradeType string
@@ -106,6 +105,8 @@ type system struct {
 	settings     settings.Config
 	datasource   DataSource
 	orderService OrderService
+	// make it a map if we plan to support multiple positions
+	rw sync.RWMutex
 }
 
 type RecordConfig struct {
@@ -207,6 +208,11 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 
 	tr, _ := prevCandleAnalysis["TR"]
 	atr, _ := prevCandleAnalysis["ATR"]
+	ma, _ := prevCandleAnalysis["MA"]
+	var (
+		tp float64
+		ot float64
+	)
 
 	switch result.TradeType {
 	case TradeTypeLong:
@@ -217,6 +223,8 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
+		tp = takeProfit
+		ot = result.OpenTradeAtV()
 	case TradeTypeShort:
 		stopLoss := result.OpenTradeAtV() + ((result.OpenTradeAtV()) / config.LotSize)
 		// since leverage is 10 times
@@ -225,6 +233,8 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		result.TakeProfitAt = fmt.Sprintf("%v", RoundToDecimalPoint(takeProfit, quotePrecision))
 		result.StopLossAt = fmt.Sprintf("%v", RoundToDecimalPoint(stopLoss, quotePrecision))
 		result.TradeSize = fmt.Sprintf("%v", RoundToDecimalPoint(tradeSize, lotPrecision))
+		tp = takeProfit
+		ot = result.OpenTradeAtV()
 	}
 	// set timestamp
 	result.CreatedAt = time.Now().UTC()
@@ -233,15 +243,45 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	result.OpenTradeAt = buyPrice
 	result.Volume = c.Volume
 
+	skipa := false
+	skipb := false
+	skipc := false
+
 	if tr < (atr * 1.3) {
 		// we should enforce this.
-		logger.Warn(ctx, "atr is less than 1.3x", zap.Any("result", result))
+		// logger.Warn(ctx, "atr is less than 1.3x", zap.Any("result", result))
 
 		// we need momentum
+		// TODO: We might remove it.
+		skipa = true
+	}
+
+	// TODO: Check if TP is above or below MA (short TP should be above MA) invert for long
+	if !((result.TradeType == TradeTypeShort && tp > ma) || (result.TradeType == TradeTypeLong && tp < ma)) {
+		skipb = true
+	}
+
+	// TODO: Check if OT is above or below MA (short OT should be above MA) invert for long
+	// look at this
+	if !((result.TradeType == TradeTypeShort && ot > ma) || (result.TradeType == TradeTypeLong && ot < ma)) {
+		skipc = true
+	}
+
+	logger.Warn(ctx, "trade info", zap.Any("skipa", skipa), zap.Any("skipb", skipb), zap.Any("skipc", skipc), zap.Any("result", result))
+
+	if result.TradeType == TradeTypeShort {
+		logger.Warn(ctx, "skipping shorts", zap.Any("result", result))
+
 		return
 	}
 
-	s.placeTrade(ctx, result)
+	if !skipa || !skipc {
+		s.placeTrade(ctx, result)
+	}
+
+	// if !skipa && !skipc {
+	//     s.placeTrade(ctx, result)
+	// }
 }
 
 func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
@@ -257,6 +297,10 @@ func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
 			return
 		}
 
+		// acquire lock
+		s.rw.Lock()
+		defer s.rw.Unlock()
+
 		// Check if we have open trade.
 		// TODO: support opening of multiple positions.
 		if _, ok := read(result.Pair); ok {
@@ -265,24 +309,11 @@ func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
 			return
 		}
 
-		// check if we have a pending order
-		if ok := readPending(result.Pair); ok {
-			logger.Error(ctx, "already have an pending open trade", zap.Any("ignored", result))
-
-			return
-		}
-		writePending(result.Pair)
-		defer removePending(result.Pair)
-
-		count := 1
-
 		// open trade, retry 3 times before closing
-		for count <= 3 {
+		for count := 1; count <= 3; count += 1 {
 			trd, err := s.orderService.PlaceTrade(ctx, *result)
 			if err != nil {
-				logger.Warn(ctx, "prnding place order", zap.Any("ignored", result), zap.Error(err))
-
-				count += 1
+				logger.Warn(ctx, "failed place order, retrying", zap.Any("ignored", result), zap.Error(err))
 				continue
 			}
 
@@ -476,21 +507,4 @@ func remove(key Pair) {
 
 func write(key Pair, data *TradeParams) {
 	activeTrades.Store(key, data)
-}
-
-func readPending(key Pair) bool {
-	_, ok := pendingTrade.Load(key)
-	if !ok {
-		return false
-	}
-
-	return ok
-}
-
-func removePending(key Pair) {
-	pendingTrade.Delete(key)
-}
-
-func writePending(key Pair) {
-	pendingTrade.Store(key, true)
 }

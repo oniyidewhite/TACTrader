@@ -42,6 +42,8 @@ func (s *orderBlockWithRetracement) TransformAndPredict(ctx context.Context, tri
 
 				res.ReadyToBuy = false
 				res.LowPoint = MIN
+				res.ReadyToShort = false
+				res.HighPoint = MIN
 			}
 		} else if res.ReadyToShort {
 			// check if current price now touches
@@ -54,6 +56,8 @@ func (s *orderBlockWithRetracement) TransformAndPredict(ctx context.Context, tri
 
 				res.ReadyToShort = false
 				res.HighPoint = MIN
+				res.ReadyToBuy = false
+				res.LowPoint = MIN
 			}
 		}
 

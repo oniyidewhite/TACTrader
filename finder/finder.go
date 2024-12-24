@@ -160,6 +160,26 @@ func (a finderAdapter) isUSDT(input string) bool {
 	return check == "USDT"
 }
 
+func (a finderAdapter) isUSDC(input string) bool {
+	length := len(input) // USDT
+
+	var check = ""
+	for i := length - 4; i < length; i++ {
+		check += string(input[i])
+	}
+
+	if strings.Contains(strings.ReplaceAll(input, "USDC", ""), "USD") {
+		return false
+	}
+
+	// We want to trade only btc
+	if !strings.EqualFold(strings.ReplaceAll(input, "USDC", ""), "BTC") {
+		return false
+	}
+
+	return check == "USDC"
+}
+
 func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	var result = []strategy.PairConfig{}
 

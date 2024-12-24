@@ -10,13 +10,17 @@ import (
 
 	"github.com/oblessing/artisgo/expert"
 	"github.com/oblessing/artisgo/logger"
+	"time"
 )
 
 type RSTradeInfo struct {
-	LowPoint     float64
-	HighPoint    float64
-	ReadyToBuy   bool
-	ReadyToShort bool
+	LowPoint              float64
+	HighPoint             float64
+	ReadyToBuy            bool
+	ReadyToBuyTimestamp   time.Time
+	ReadyToShort          bool
+	ReadyToShortTimestamp time.Time
+	Metadata              string
 }
 
 func (i RSTradeInfo) IsTradeAble() bool {
