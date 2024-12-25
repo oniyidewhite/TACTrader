@@ -36,7 +36,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// Get runtime config
-	config, err := settings.GetRuntimeConfig()
+	config, err := settings.Load()
 	if err != nil {
 		logger.Fatal(err)
 	}

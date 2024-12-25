@@ -18,6 +18,7 @@ import (
 )
 
 type binanceAdapter struct {
+	config     settings.Config
 	client     *futures.Client
 	isTestMode bool
 }
@@ -31,6 +32,7 @@ type OrderService interface {
 func NewAdapter(config settings.Config) *binanceAdapter {
 	// binance.UseTestnet = config.IsTestMode()
 	return &binanceAdapter{
+		config:     config,
 		client:     binance.NewFuturesClient(config.BinanceApiKey, config.BinanceSecretKey),
 		isTestMode: config.IsTestMode(),
 	}
@@ -175,11 +177,7 @@ func (b *binanceAdapter) enableIsolatedTrading(ctx context.Context, pair expert.
 
 // SetLeverage tells binance to use a specific amount for this trade.
 func (b *binanceAdapter) setLeverage(ctx context.Context, pair expert.Pair) error {
-	cfg, err := settings.GetRuntimeConfig()
-	if err != nil {
-		return err
-	}
-	_, err = b.client.NewChangeLeverageService().Symbol(string(pair)).Leverage(int(cfg.PercentageLotSize)).Do(ctx)
+	_, err := b.client.NewChangeLeverageService().Symbol(string(pair)).Leverage(int(b.config.PercentageLotSize)).Do(ctx)
 	return err
 }
 

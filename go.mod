@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/adshao/go-binance/v2 v2.4.1
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.7.3
 	go.uber.org/zap v1.21.0
