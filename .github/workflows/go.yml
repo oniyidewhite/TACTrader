@@ -60,5 +60,6 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.update-task.outputs.task-definition }}
-          service: tactrader
+          service: dev-tactrader
+          cluster: dev
           wait-for-service-stability: true
