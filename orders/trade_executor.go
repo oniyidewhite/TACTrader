@@ -175,7 +175,7 @@ func (b *binanceAdapter) enableIsolatedTrading(ctx context.Context, pair expert.
 
 // SetLeverage tells binance to use a specific amount for this trade.
 func (b *binanceAdapter) setLeverage(ctx context.Context, pair expert.Pair) error {
-	cfg, err := settings.GetRuntimeConfig()
+	cfg, err := settings.Load()
 	if err != nil {
 		return err
 	}

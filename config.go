@@ -1,23 +1,26 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
 )
 
 var StartTime time.Time
 
 type Config struct {
-	BinanceApiKey     string
-	BinanceSecretKey  string
-	Interval          string
-	PercentageLotSize float64
-	RatioToOne        float64
-	BlockSize         int
-	TradeAmount       float64
-	TestType          string
-	IsBypass          bool
+	BinanceApiKey     string  `envconfig:"binance_api_key"`
+	BinanceSecretKey  string  `envconfig:"binance_secret_key"`
+	Interval          string  `envconfig:"interval" default:"3m"`
+	PercentageLotSize float64 `envconfig:"percentage_lot_size" default:"14"`
+	RatioToOne        float64 `envconfig:"ratio_to_one" default:"0.07"`
+	BlockSize         int     `envconfig:"block_size" default:"10"`
+	TradeAmount       float64 `envconfig:"trade_amount" default:"40"`
+	TestType          string  `envconfig:"test_type" default:"real"`
+	IsBypass          bool    `envconfig:"is_bypass" default:"false"`
 }
 
 func (c Config) IsTestMode() bool {
@@ -79,4 +82,15 @@ func GetRuntimeConfig() (Config, error) {
 		TestType:          data[5],
 		IsBypass:          IsBypass,
 	}, nil
+}
+
+// Load loads up the config into the app start initialization
+func Load() (Config, error) {
+	var cfg Config
+
+	if err := envconfig.Process("", &cfg); err != nil {
+		return Config{}, fmt.Errorf("error loading config: %w", err)
+	}
+
+	return cfg, nil
 }
