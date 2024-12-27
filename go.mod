@@ -1,6 +1,6 @@
 module github.com/oblessing/artisgo
 
-go 1.17
+go 1.23
 
 require (
 	github.com/adshao/go-binance/v2 v2.4.1
