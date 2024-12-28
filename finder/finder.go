@@ -183,6 +183,8 @@ func (a finderAdapter) isUSDC(input string) bool {
 }
 
 func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
+	logger.Info(context.Background(), "filter and map input", zap.Any("list", list))
+
 	var result = []strategy.PairConfig{}
 
 	// TODO: find a better way to pass in the strategy
