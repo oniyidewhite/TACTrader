@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/oblessing/artisgo/logger"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"strings"
@@ -206,6 +208,7 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 		}
 	}
 
+	logger.Info(context.Background(), "filter and map", zap.Any("result", result))
 	return result
 }
 
