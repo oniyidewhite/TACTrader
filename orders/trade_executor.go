@@ -179,6 +179,7 @@ func (b *binanceAdapter) setLeverage(ctx context.Context, pair expert.Pair) erro
 	if err != nil {
 		return err
 	}
+	logger.Info(ctx, "config gotten at set leverage", zap.Any("config", cfg.MaskForLog()))
 	_, err = b.client.NewChangeLeverageService().Symbol(string(pair)).Leverage(int(cfg.PercentageLotSize)).Do(ctx)
 	return err
 }

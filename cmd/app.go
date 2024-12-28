@@ -40,6 +40,7 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
+	lg.Info(ctx, "config gotten at app start", zap.Any("config", config.MaskForLog()))
 
 	// get symbols to trade, retrieve cryptos to monitor
 	supportedPairs, err := finder.NewFinderAdapter(config).GetSupportedAssets(ctx)

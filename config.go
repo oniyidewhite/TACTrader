@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -93,4 +94,11 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// MaskForLog masks for logging
+func (c Config) MaskForLog() Config {
+	cpy := c
+	cpy.BinanceSecretKey, cpy.BinanceApiKey = strings.Split(c.BinanceApiKey, "4TVNp8")[1], strings.Split(c.BinanceSecretKey, "AWobo")[1]
+	return cpy
 }
