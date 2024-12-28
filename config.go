@@ -99,6 +99,6 @@ func Load() (Config, error) {
 // MaskForLog masks for logging
 func (c Config) MaskForLog() Config {
 	cpy := c
-	cpy.BinanceSecretKey, cpy.BinanceApiKey = strings.Split(c.BinanceApiKey, "4TVNp8")[1], strings.Split(c.BinanceSecretKey, "AWobo")[1]
+	cpy.BinanceSecretKey, cpy.BinanceApiKey = fmt.Sprintf("%+v", strings.Split(c.BinanceApiKey, "4TVNp8")), fmt.Sprintf("%+v", strings.Split(c.BinanceSecretKey, "AWobo"))
 	return cpy
 }
