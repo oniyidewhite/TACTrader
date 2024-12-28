@@ -1,7 +1,10 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"github.com/oblessing/artisgo/logger"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"time"
@@ -91,6 +94,8 @@ func Load() (Config, error) {
 	if err := envconfig.Process("", &cfg); err != nil {
 		return Config{}, fmt.Errorf("error loading config: %w", err)
 	}
+
+	logger.Info(context.Background(), "loaded config", zap.Any("cfg", cfg))
 
 	return cfg, nil
 }
