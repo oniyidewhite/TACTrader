@@ -57,6 +57,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
+	time.Sleep(7 * time.Minute) // we need this delay to whitelist the IP on binance
 	// get symbols to trade, retrieve cryptos to monitor
 	supportedPairs, err := finder.NewFinderAdapter(config).GetSupportedAssets(ctx)
 	if err != nil {
