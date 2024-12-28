@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"io"
 	log2 "log"
 	"net/http"
 	"os"
@@ -42,8 +42,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			logger.Fatal(err)
+		}
+	}(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	fmt.Printf("Outbound IP Address: %s\n", string(body))
 
 	// Get runtime config
@@ -51,7 +56,6 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	lg.Info(ctx, "config gotten at app start", zap.Any("config", config))
 
 	// get symbols to trade, retrieve cryptos to monitor
 	supportedPairs, err := finder.NewFinderAdapter(config).GetSupportedAssets(ctx)
