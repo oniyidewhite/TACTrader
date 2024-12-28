@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -13,15 +12,15 @@ import (
 var StartTime time.Time
 
 type Config struct {
-	BinanceApiKey     string  `envconfig:"binance_api_key"`
-	BinanceSecretKey  string  `envconfig:"binance_secret_key"`
-	Interval          string  `envconfig:"interval" default:"3m"`
-	PercentageLotSize float64 `envconfig:"percentage_lot_size" default:"14"`
-	RatioToOne        float64 `envconfig:"ratio_to_one" default:"0.07"`
-	BlockSize         int     `envconfig:"block_size" default:"10"`
-	TradeAmount       float64 `envconfig:"trade_amount" default:"40"`
-	TestType          string  `envconfig:"test_type" default:"real"`
-	IsBypass          bool    `envconfig:"is_bypass" default:"false"`
+	BinanceApiKey     string  `envconfig:"BINANCE_API_KEY"`
+	BinanceSecretKey  string  `envconfig:"BINANCE_SECRET_KEY"`
+	Interval          string  `envconfig:"INTERVAL" default:"3m"`
+	PercentageLotSize float64 `envconfig:"PERCENTAGE_LOT_SIZE" default:"14"`
+	RatioToOne        float64 `envconfig:"RATIO_TO_ONE" default:"0.07"`
+	BlockSize         int     `envconfig:"BLOCK_SIZE" default:"10"`
+	TradeAmount       float64 `envconfig:"TRADE_AMOUNT" default:"40"`
+	TestType          string  `envconfig:"TEST_TYPE" default:"real"`
+	IsBypass          bool    `envconfig:"IS_BYPASS" default:"false"`
 }
 
 func (c Config) IsTestMode() bool {
@@ -94,11 +93,4 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
-}
-
-// MaskForLog masks for logging
-func (c Config) MaskForLog() Config {
-	cpy := c
-	cpy.BinanceSecretKey, cpy.BinanceApiKey = fmt.Sprintf("%+v", strings.Split(c.BinanceApiKey, "4TVNp8")), fmt.Sprintf("%+v", strings.Split(c.BinanceSecretKey, "AWobo"))
-	return cpy
 }
