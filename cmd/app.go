@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"go.uber.org/zap"
+	"io/ioutil"
 	log2 "log"
+	"net/http"
 	"os"
 	"runtime"
 	"time"
@@ -34,6 +37,14 @@ func main() {
 
 	// Let the system take advantage of all cores.
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	resp, err := http.Get("https://ifconfig.me")
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	fmt.Printf("Outbound IP Address: %s\n", string(body))
 
 	// Get runtime config
 	config, err := settings.Load()
