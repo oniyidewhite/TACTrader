@@ -12,15 +12,16 @@ import (
 var StartTime time.Time
 
 type Config struct {
-	BinanceApiKey     string  `envconfig:"BINANCE_API_KEY"`
-	BinanceSecretKey  string  `envconfig:"BINANCE_SECRET_KEY"`
-	Interval          string  `envconfig:"INTERVAL" default:"3m"`
-	PercentageLotSize float64 `envconfig:"PERCENTAGE_LOT_SIZE" default:"14"`
-	RatioToOne        float64 `envconfig:"RATIO_TO_ONE" default:"0.07"`
-	BlockSize         int     `envconfig:"BLOCK_SIZE" default:"10"`
-	TradeAmount       float64 `envconfig:"TRADE_AMOUNT" default:"40"`
-	TestType          string  `envconfig:"TEST_TYPE" default:"real"`
-	IsBypass          bool    `envconfig:"IS_BYPASS" default:"false"`
+	BinanceApiKey      string  `envconfig:"BINANCE_API_KEY"`
+	BinanceSecretKey   string  `envconfig:"BINANCE_SECRET_KEY"`
+	Interval           string  `envconfig:"INTERVAL" default:"3m"`
+	PercentageLotSize  float64 `envconfig:"PERCENTAGE_LOT_SIZE" default:"14"`
+	RatioToOne         float64 `envconfig:"RATIO_TO_ONE" default:"0.07"`
+	BlockSize          int     `envconfig:"BLOCK_SIZE" default:"10"`
+	TradeAmount        float64 `envconfig:"TRADE_AMOUNT" default:"40"`
+	TestType           string  `envconfig:"TEST_TYPE" default:"real"`
+	IsBypass           bool    `envconfig:"IS_BYPASS" default:"false"`
+	TimeToStartService string  `envconfig:"TIME_TO_START_SERVICE" default:"300s"` // please pass time.Duration values
 }
 
 func (c Config) IsTestMode() bool {

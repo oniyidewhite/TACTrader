@@ -57,7 +57,13 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	time.Sleep(7 * time.Minute) // we need this delay to whitelist the IP on binance
+	// get the default time to wait before starting service
+	duration, err := time.ParseDuration(config.TimeToStartService)
+	if err != nil {
+		duration = 7 * time.Minute // default
+	}
+	time.Sleep(duration) // we need this delay so we can whitelist the IP on binance
+
 	// get symbols to trade, retrieve cryptos to monitor
 	supportedPairs, err := finder.NewFinderAdapter(config).GetSupportedAssets(ctx)
 	if err != nil {

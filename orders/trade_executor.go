@@ -51,10 +51,12 @@ func (b *binanceAdapter) UpdateConfiguration(ctx context.Context, pairs ...strat
 		g.Go(func() error {
 			err := b.enableIsolatedTrading(ctx, expert.Pair(p.Pair))
 			if err != nil {
+				logger.Warn(ctx, "unable to enable isolated trading::: ignoring...", zap.Error(err))
 				// Do not log unsupported pairs [just silently ignore]
 			}
 			err = b.setLeverage(ctx, expert.Pair(p.Pair))
 			if err != nil {
+				logger.Warn(ctx, "unable to set leverage::: ignoring...", zap.Error(err))
 				// Do not log unsupported pairs [just silently ignore]
 			} else {
 				validPairs <- p
@@ -107,7 +109,7 @@ func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradePara
 	case expert.TradeTypeShort:
 		return b.placeShort(ctx, params)
 	default:
-		return expert.TradeData{}, errors.New("unsupported trade tyep")
+		return expert.TradeData{}, errors.New("unsupported trade type")
 	}
 }
 
