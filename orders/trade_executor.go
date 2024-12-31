@@ -93,7 +93,7 @@ func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradePara
 	}
 
 	if params.OpenTradeAt == params.StopLossAt {
-		return expert.TradeData{}, errors.New("can not open a trade at the take stoploss position")
+		return expert.TradeData{}, errors.New("can not open a trade at the take stop-loss position")
 	}
 
 	if b.isTestMode {
@@ -107,7 +107,7 @@ func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradePara
 	case expert.TradeTypeShort:
 		return b.placeShort(ctx, params)
 	default:
-		return expert.TradeData{}, errors.New("unsupported trade tyep")
+		return expert.TradeData{}, errors.New("unsupported trade type")
 	}
 }
 
@@ -175,7 +175,7 @@ func (b *binanceAdapter) enableIsolatedTrading(ctx context.Context, pair expert.
 
 // SetLeverage tells binance to use a specific amount for this trade.
 func (b *binanceAdapter) setLeverage(ctx context.Context, pair expert.Pair) error {
-	cfg, err := settings.GetRuntimeConfig()
+	cfg, err := settings.Load()
 	if err != nil {
 		return err
 	}

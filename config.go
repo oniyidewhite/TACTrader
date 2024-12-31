@@ -1,29 +1,34 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
 )
 
 var StartTime time.Time
 
 type Config struct {
-	BinanceApiKey     string
-	BinanceSecretKey  string
-	Interval          string
-	PercentageLotSize float64
-	RatioToOne        float64
-	BlockSize         int
-	TradeAmount       float64
-	TestType          string
-	IsBypass          bool
+	BinanceApiKey     string  `envconfig:"BINANCE_API_KEY"`
+	BinanceSecretKey  string  `envconfig:"BINANCE_SECRET_KEY"`
+	Interval          string  `envconfig:"INTERVAL" default:"3m"`
+	PercentageLotSize float64 `envconfig:"PERCENTAGE_LOT_SIZE" default:"14"`
+	RatioToOne        float64 `envconfig:"RATIO_TO_ONE" default:"0.07"`
+	BlockSize         int     `envconfig:"BLOCK_SIZE" default:"10"`
+	TradeAmount       float64 `envconfig:"TRADE_AMOUNT" default:"40"`
+	TestType          string  `envconfig:"TEST_TYPE" default:"real"`
+	IsBypass          bool    `envconfig:"IS_BYPASS" default:"false"`
 }
 
 func (c Config) IsTestMode() bool {
 	return c.TestType == "test"
 }
 
+// GetRuntimeConfig returns the config to be used on app start
+// DEPRECATED: we might need this again since we're deploying to cloud
 func GetRuntimeConfig() (Config, error) {
 	var data = os.Args[1:]
 	if len(data) < 5 {
@@ -79,4 +84,15 @@ func GetRuntimeConfig() (Config, error) {
 		TestType:          data[5],
 		IsBypass:          IsBypass,
 	}, nil
+}
+
+// Load loads up the config into the app start initialization
+func Load() (Config, error) {
+	var cfg Config
+
+	if err := envconfig.Process("", &cfg); err != nil {
+		return Config{}, fmt.Errorf("error loading config: %w", err)
+	}
+
+	return cfg, nil
 }
