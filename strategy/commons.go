@@ -131,6 +131,38 @@ var ATR = func(candles []*expert.Candle) float64 {
 	return sum / float64(len(candles))
 }
 
+var HH24 = func(candles []*expert.Candle) float64 {
+	value := candles[len(candles)-1].High
+	for _, i := range candles {
+		c, ok := i.OtherData["HH24"]
+		if ok {
+			value = c
+		}
+	}
+
+	if candles[len(candles)-1].High > value {
+		return candles[len(candles)-1].High
+	}
+
+	return value
+}
+
+var LL24 = func(candles []*expert.Candle) float64 {
+	value := candles[len(candles)-1].Low
+	for _, i := range candles {
+		c, ok := i.OtherData["LL24"]
+		if ok {
+			value = c
+		}
+	}
+
+	if candles[len(candles)-1].Low < value {
+		return candles[len(candles)-1].Low
+	}
+
+	return value
+}
+
 var TR = func(candles []*expert.Candle) float64 {
 	if len(candles) < 2 {
 		return 0
@@ -192,6 +224,14 @@ func GetDefaultAnalysis() []*expert.CalculateAction {
 		{
 			Name:   "ATR",
 			Action: ATR,
+		},
+		{
+			Name:   "HH24",
+			Action: HH24,
+		},
+		{
+			Name:   "LL24",
+			Action: LL24,
 		},
 	}
 }
