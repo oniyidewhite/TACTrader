@@ -23,6 +23,8 @@ const (
 var (
 	// TODO: Add support for placing multiple trades for a specific symbol
 	activeTrades = sync.Map{} // map[Pair]*TradeParams{}
+
+	nextReset = time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()+1, 0, 0, 0, 0, time.UTC)
 )
 
 type TradeType string
@@ -169,6 +171,17 @@ func (s *system) Record(ctx context.Context, c *Candle, transform Transform, con
 
 		d := append([]*Candle{}, candles...)
 		d = append(d, candle)
+		if time.Now().After(nextReset) {
+			t := time.Now()
+			// we should reset our record
+			nextReset = time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC)
+			for _, v := range d {
+				// we should reset any 24 hour indicator
+				delete(v.OtherData, "LL24")
+				delete(v.OtherData, "HH24")
+			}
+		}
+
 		candle.OtherData[action.Name] = action.Action(d)
 	}
 
@@ -209,6 +222,7 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	tr, _ := prevCandleAnalysis["TR"]
 	atr, _ := prevCandleAnalysis["ATR"]
 	ma, _ := prevCandleAnalysis["MA"]
+	hh24h, _ := prevCandleAnalysis["HH24"]
 	var (
 		tp float64
 		ot float64
@@ -261,13 +275,15 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		skipb = true
 	}
 
+	change := ((hh24h - c.Close) / ((hh24h + c.Close) / 2)) * 100
+
 	// TODO: Check if OT is above or below MA (short OT should be above MA) invert for long
 	// look at this
 	if !((result.TradeType == TradeTypeShort && ot > ma) || (result.TradeType == TradeTypeLong && ot < ma)) {
 		skipc = true
 	}
 
-	logger.Warn(ctx, "trade info", zap.Any("skipa", skipa), zap.Any("skipb", skipb), zap.Any("skipc", skipc), zap.Any("result", result))
+	logger.Warn(ctx, "trade info", zap.Any("skipa", skipa), zap.Any("skipb", skipb), zap.Any("skipc", skipc), zap.Any("%change", change), zap.Any("result", result))
 
 	if result.TradeType == TradeTypeShort {
 		logger.Warn(ctx, "skipping shorts", zap.Any("result", result))
@@ -278,9 +294,8 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 	if !skipa || !skipc {
 		s.placeTrade(ctx, result)
 	}
-
-	// if !skipa && !skipc {
-	//     s.placeTrade(ctx, result)
+	// if !(skipa || skipc) {
+	// 	s.placeTrade(ctx, result)
 	// }
 }
 
