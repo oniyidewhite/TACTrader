@@ -291,12 +291,9 @@ func (s *system) processTrade(ctx context.Context, c Candle, transform Transform
 		return
 	}
 
-	if !skipa || !skipc {
+	if !(skipa || skipc) {
 		s.placeTrade(ctx, result)
 	}
-	// if !(skipa || skipc) {
-	// 	s.placeTrade(ctx, result)
-	// }
 }
 
 func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
