@@ -321,8 +321,8 @@ func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
 			return
 		}
 
-		// open trade, retry 3 times before closing
-		for count := 1; count <= 3; count += 1 {
+		// open trade, retry 5 times before closing
+		for count := 1; count <= 5; count += 1 {
 			trd, err := s.orderService.PlaceTrade(ctx, *result)
 			if err != nil {
 				logger.Warn(ctx, "failed place order, retrying", zap.Any("ignored", result), zap.Error(err))
