@@ -54,7 +54,7 @@ jobs:
           image: ${{ steps.build-and-push.outputs.image }}
 
       - name: Deploy updated ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.update-task.outputs.task-definition }}
           service: prod-tactrader
