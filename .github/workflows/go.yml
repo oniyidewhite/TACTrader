@@ -1,9 +1,6 @@
 name: Deploy TacTrader Service
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:

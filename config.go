@@ -28,6 +28,8 @@ func (c Config) IsTestMode() bool {
 	return c.TestType == "test"
 }
 
+// GetRuntimeConfig returns the config to be used on app start
+// DEPRECATED: we might need this again since we're deploying to cloud
 func GetRuntimeConfig() (Config, error) {
 	var data = os.Args[1:]
 	if len(data) < 5 {

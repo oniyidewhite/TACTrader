@@ -14,7 +14,11 @@ type LogTag string
 
 func init() {
 	var err error
-	logger, err = zap.NewDevelopment(zap.AddCallerSkip(1))
+
+	cfg := zap.NewProductionConfig()
+	cfg.Sampling = nil
+	cfg.EncoderConfig.FunctionKey = "functionName"
+	logger, err = cfg.Build(zap.AddCallerSkip(1), zap.AddCaller())
 	if err != nil {
 		panic(err)
 	}

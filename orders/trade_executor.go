@@ -95,7 +95,7 @@ func (b *binanceAdapter) PlaceTrade(ctx context.Context, params expert.TradePara
 	}
 
 	if params.OpenTradeAt == params.StopLossAt {
-		return expert.TradeData{}, errors.New("can not open a trade at the take stoploss position")
+		return expert.TradeData{}, errors.New("can not open a trade at the take stop-loss position")
 	}
 
 	if b.isTestMode {

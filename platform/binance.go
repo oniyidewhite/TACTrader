@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	settings "github.com/oblessing/artisgo"
 	"github.com/oblessing/artisgo/strategy"
 
@@ -42,7 +43,7 @@ func (r *myBinance) StartTrading(ctx context.Context, pairs ...strategy.PairConf
 			wsKlineHandler := func(event *futures.WsKlineEvent) {
 				ctx := context.Background()
 
-				r.trader.Record(ctx, convert(event), p.Strategy, expert.RecordConfig{
+				r.trader.Record(logger.With(ctx, zap.Any("trace.id", uuid.New().String())), convert(event), p.Strategy, expert.RecordConfig{
 					AdditionalData:  p.AdditionalData,
 					LotSize:         p.LotSize,
 					RatioToOne:      p.RatioToOne,
