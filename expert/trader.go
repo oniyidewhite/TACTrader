@@ -326,6 +326,7 @@ func (s *system) placeTrade(ctx context.Context, result *TradeParams) {
 			trd, err := s.orderService.PlaceTrade(ctx, *result)
 			if err != nil {
 				logger.Warn(ctx, "failed place order, retrying", zap.Any("ignored", result), zap.Int("count", count), zap.Error(err))
+				<-time.After(5 * time.Second)
 				continue
 			}
 
