@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
+	"strings"
 )
 
 var StartTime time.Time
@@ -16,11 +17,23 @@ type Config struct {
 	BinanceSecretKey  string  `envconfig:"BINANCE_SECRET_KEY"`
 	Interval          string  `envconfig:"INTERVAL" default:"3m"`
 	PercentageLotSize float64 `envconfig:"PERCENTAGE_LOT_SIZE" default:"14"`
-	RatioToOne        float64 `envconfig:"RATIO_TO_ONE" default:"0.07"`
+	RatioToOne        float64 `envconfig:"RATIO_TO_ONE" default:"0.04"`
 	BlockSize         int     `envconfig:"BLOCK_SIZE" default:"10"`
 	TradeAmount       float64 `envconfig:"TRADE_AMOUNT" default:"40"`
 	TestType          string  `envconfig:"TEST_TYPE" default:"real"`
 	IsBypass          bool    `envconfig:"IS_BYPASS" default:"false"`
+	TradePair         string  `envconfig:"TRADE_PAIR" default:"BTCUSDT,SOLUSDT"`
+	HardStop          bool    `envconfig:"HARD_STOP" default:"false"`
+}
+
+func (c Config) IsSupportedTradePair(input string) bool {
+	for _, v := range strings.Split(c.TradePair, ",") {
+		if strings.EqualFold(input, v) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (c Config) IsTestMode() bool {

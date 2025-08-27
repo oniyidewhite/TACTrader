@@ -140,44 +140,12 @@ func (a finderAdapter) lotSize() float64 {
 	return a.config.PercentageLotSize
 }
 
-func (a finderAdapter) isUSDT(input string) bool {
-	length := len(input) // USDT
-
-	var check = ""
-	for i := length - 4; i < length; i++ {
-		check += string(input[i])
+func (a finderAdapter) isSupportedTradingPair(input string) bool {
+	if a.config.IsSupportedTradePair(input) {
+		return !a.config.HardStop
 	}
 
-	if strings.Contains(strings.ReplaceAll(input, "USDT", ""), "USD") {
-		return false
-	}
-
-	// We want to trade only btc
-	if !strings.EqualFold(strings.ReplaceAll(input, "USDT", ""), "BTC") {
-		return false
-	}
-
-	return check == "USDT"
-}
-
-func (a finderAdapter) isUSDC(input string) bool {
-	length := len(input) // USDT
-
-	var check = ""
-	for i := length - 4; i < length; i++ {
-		check += string(input[i])
-	}
-
-	if strings.Contains(strings.ReplaceAll(input, "USDC", ""), "USD") {
-		return false
-	}
-
-	// We want to trade only btc
-	if !strings.EqualFold(strings.ReplaceAll(input, "USDC", ""), "BTC") {
-		return false
-	}
-
-	return check == "USDC"
+	return false
 }
 
 func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
@@ -187,7 +155,7 @@ func (a finderAdapter) filterAndMap(list []CryptoPair) []strategy.PairConfig {
 	algo := strategy.NewOrderBlockWithRetracement(a.config.BlockSize) // .NewJustRandom("buy") // .NewOrderBlockWithRetracement(a.config.BlockSize) // NewDivergentReversalWithRenko() // .NewWolfieStrategy(true) //
 
 	for _, pair := range list {
-		if a.isUSDT(pair.Symbol) {
+		if a.isSupportedTradingPair(pair.Symbol) {
 			minPrice := findValueForKey("PRICE_FILTER", pair)
 			stepSize := findValueForKey("LOT_SIZE", pair)
 			precision := pair.QuotePrecision

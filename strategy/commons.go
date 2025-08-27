@@ -117,20 +117,6 @@ var VMA = func(candles []*expert.Candle) float64 {
 	return sum / float64(len(candles))
 }
 
-var ATR = func(candles []*expert.Candle) float64 {
-	var sum float64 = 0
-	for _, i := range candles {
-		c, ok := i.OtherData["TR"]
-		if ok {
-			sum += c
-		} else {
-			return 0
-		}
-	}
-
-	return sum / float64(len(candles))
-}
-
 var HH24 = func(candles []*expert.Candle) float64 {
 	value := candles[len(candles)-1].High
 	for _, i := range candles {
@@ -171,6 +157,20 @@ var TR = func(candles []*expert.Candle) float64 {
 	lst := candles[len(candles)-1]
 
 	return math.Max(lst.High-lst.Low, math.Max(math.Abs(lst.High-prv.Close), math.Abs(lst.Low-prv.Close)))
+}
+
+var ATR = func(candles []*expert.Candle) float64 {
+	var sum float64 = 0
+	for _, i := range candles {
+		c, ok := i.OtherData["TR"]
+		if ok {
+			sum += c
+		} else {
+			return 0
+		}
+	}
+
+	return sum / float64(len(candles))
 }
 
 var LASTCLOSE = func(candles []*expert.Candle) float64 {
