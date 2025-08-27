@@ -23,7 +23,7 @@ type Config struct {
 	TestType          string  `envconfig:"TEST_TYPE" default:"real"`
 	IsBypass          bool    `envconfig:"IS_BYPASS" default:"false"`
 	TradePair         string  `envconfig:"TRADE_PAIR" default:"BTCUSDT,SOLUSDT"`
-	HardStop          bool    `envconfig:"HARD_STOP" default:"false"`
+	HardStop          bool    `envconfig:"HARD_STOP" default:"true"`
 }
 
 func (c Config) IsSupportedTradePair(input string) bool {
